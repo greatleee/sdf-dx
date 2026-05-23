@@ -305,10 +305,99 @@ MEMORY.md index에 1줄 추가.
 
 ---
 
-## §10. (실행 중 추가될) Verified findings + new questions
+## §10. Verified findings + decisions (2026-05-23)
 
-(verify 단계에서 채워질 영역)
+> §2 verify 완료 후 작성. §3~§7의 first-draft 추정 위에 우선함. 이 섹션이 ADR 작성의 frozen source.
+
+### §10.1 Verified findings — the reference codebase 실제 (직접 read)
+
+읽은 파일 (12 files):
+- `composition.py`
+- `domain/execution.py`, `domain/shift.py`, `domain/shift_config.py`
+- `ports/unit_of_work.py`, `ports/admin_operations.py`, `ports/orders.py`
+- `adapters/sqlalchemy_uow.py`, `adapters/postgres_orders.py`, `adapters/system_clock.py`, `adapters/fakes.py` (first 200 lines)
+- `use_cases/admin_line_register.py`
+
+| # | 항목 | the reference codebase 실제 |
+|---|---|---|
+| 1 | 폴더 구조 | top-level flat. `contexts/` 없음 (single-BC project). `domain/`, `ports/`, `use_cases/`, `adapters/`, `api/`, `bootstrap/`, `jobs/`, `config.py`, `composition.py`, `main.py` 모두 top-level. |
+| 2 | Domain types | Pydantic v2 `BaseModel` + `ConfigDict(frozen=True, extra="forbid")` — 전 domain 파일 (`Shift`, `RunRecord`, `ShiftConfigSnapshot`, `RankEntry` 등). |
+| 3 | Sum types | Pydantic `BaseModel` + `tag: Literal["..."] = "..."` field + Union. 예: `ScheduleFreezeOk` / `ScheduleFreezeViolated` → `ScheduleFreezeOutcome`. |
+| 4 | Ports 위치 | top-level `ports/`, file-per-feature. **ClockPort는 `ports/admin_operations.py`에 co-located** (별도 `ports/clock.py` 없음). |
+| 5 | Port/Adapter naming | `*Repo` / `*Port` / `*Reader` / `*Ledger` / `*Adapter` 혼재. role-specific 명명. 예: `OrdersRepoPort`, `AdminLineRepo`, `ShiftRepo`, `ClockPort`, `LineSetupPort`. |
+| 6 | ORM | `_Base(DeclarativeBase)` + `_Order(_Base)` private + `PostgresOrdersRepo(session)` public. Adapter는 primitive(`int`, `int \| None`) 반환, ORM class 외부 leak 없음. |
+| 7 | Clock | 항상 `ClockPort` Protocol. `SystemClock` (production) / `FixedClock` (test) 모두 구현. `Callable[[], datetime]` 안 씀. |
+| 8 | UoW | `UnitOfWork` Protocol + `SqlAlchemyUnitOfWork` adapter. Per-feature repo attributes (`shift_config`, `lines`, `audit_logs` 등). `async with uow:` 안에서 mutate → `await uow.commit()` 또는 `__aexit__` rollback. Adapter는 commit 안 함. |
+
+### §10.2 추가 발견 (plan §2에 없던 것)
+
+1. **importlinter contract**: `adapters-no-upward` — adapter는 Port class import 금지. Composition root에서 `cast(UnitOfWork, SqlAlchemyUnitOfWork(...))` 로 structural match acknowledge.
+2. **`uow.session` property exposed** — composition root가 session-bound adapter (`sensor_reader(uow) = LineSensorReader(uow.session)`)를 use case에 inject. Use case는 `_session` 직접 안 만짐.
+3. **Use case composition**: `AdminShiftEndTriggerUseCase(uow_factory, clock, ShiftEndFinalizeUseCase)` — use case가 다른 use case를 inject 받음.
+4. **Adapter 이름 다양**: `Postgres*`, `Memcached*`, `*Repo`, `*Ledger`, `*Adapter`, `*Reader` — 패턴 강제 없음, 역할에 맞게.
+5. **`InMemoryDataset` 공유 mutable state** — `FakeAuditLogRepo(dataset)` 등 여러 fake가 single `InMemoryDataset` 공유. Real session-bound adapter pattern을 mirror.
+6. **Tagged outcome 디테일**: `tag: Literal["..."] = "..."` field가 class type AND tag literal **양쪽으로** discriminate 가능. (HTTP 직렬화 시 tag 활용 가능)
+7. **Async session config**: `async_sessionmaker(engine, expire_on_commit=False)` — async post-commit lazy-load foot-gun 방지 (design §4.2.1).
+8. **`LegacyUserReader`**: 별도 MySQL RO engine + adapter. cross-system read port.
+9. **`call_log` 패턴 in fakes**: 옵션 list 공유로 cross-fake call-order assertion (lock-then-read 검증 등).
+10. **DDD 용어는 docstring/ADR에만**: class 이름은 concrete (`Shift`, not `ShiftAggregate`). 우리 룰의 "Aggregate suffix 금지"는 이미 정렬됨.
+
+### §10.3 Decision matrix (11개 결정 + 메타)
+
+| # | 영역 | 결정 | the reference codebase과 정렬? |
+|---|---|---|---|
+| 1 | 모듈 구조 | `contexts/<bc>/` 유지 (multi-BC) | 부분 (the reference codebase은 single-BC) |
+| 2 | Domain types | `@dataclass(frozen=True, slots=True)` 유지 — ADR-0018 status quo | ❌ 의도적 divergence |
+| 3 | Sum types | `@dataclass + Union`, **tag field 없이**. discriminate는 `match Case():` 로 | ❌ 의도적 단순화 |
+| 4 | Ports 위치 | `contexts/<bc>/ports/` 폴더 + file-per-feature | ✅ BC 내부 mirror |
+| 5 | Port/Adapter naming | `*Repo` 양쪽 (Port + Adapter) 허용. 기존 `*Reader`/`*Writer`/`*Port`/`*Ledger`/`*Adapter` 모두 OK. (이유: "repo는 이제 DDD만의 용어가 아니라 범용 어휘") | ✅ 정렬 |
+| 6 | BC 내부 use case 폴더 | `application/` 유지 — hexagonal 용어 일관 | ❌ 이름만 차이 |
+| 7 | Clock | `ClockPort` Protocol 통일. `Callable[[], datetime]` 폐기 | ✅ 정렬 |
+| 8 | UoW | `UnitOfWork` Protocol + `SqlAlchemyUnitOfWork` 신규 도입 | ✅ 정렬 |
+| 9 | ORM | adapter 내 containment OK (private `_X` + public `Repo`) | ✅ 정렬 |
+| 10 | importlinter | `adapters-no-upward` 등 채택 | ✅ 정렬 |
+| 11 | Fakes | `tests/contexts/<bc>/fakes.py` + `InMemoryDataset` shared state | ✅ 정렬 (위치만 src→tests) |
+
+추가:
+- Cross-BC use cases (`src/sdf_api/use_cases/`) 유지 — the reference codebase 해당없음.
+- DomainEventDispatcher 기존 룰 유지 — the reference codebase 해당없음.
+- **Kotlin**: 이번 plan에서 변경 없음. ADR-0019~0024는 **Python 전용**. Kotlin 전용 ADR은 **Phase 1 Task 4 (Kotlin gateway 셋업) 도달 시점**에 별도 작성. 룰 파일의 기존 Kotlin parallel 구문은 현 수준 유지.
+
+### §10.4 ADR 작성 목록 (확정)
+
+| ADR | 주제 | 상태 |
+|---|---|---|
+| 0019 | Persistence with ORM containment (private `_X` + public `Repo`) | 신규 — 필수 |
+| 0020 | Unit of Work pattern (`UnitOfWork` Protocol + `SqlAlchemyUnitOfWork`) | 신규 — 필수 |
+| 0021 | ClockPort Protocol standardized (`Callable` 폐기) | 신규 — 필수 |
+| 0022 | Ports as folder + file-per-feature (BC 내부) | 신규 — 필수 |
+| 0023 | importlinter contract set (`adapters-no-upward` 등) | 신규 — 필수 |
+| 0024 | Fakes per-BC + `InMemoryDataset` shared state | 신규 — 권장 |
+| ~~0018~~ | Pydantic at boundary only | **유지** (status quo). "the reference codebase과 의도적 divergence" 1줄 보강만 가능. |
+
+`*Repo` suffix 허용은 별도 ADR 불필요 — ADR-0019 본문 + 룰 §9 수정으로 충분.
+
+### §10.5 변경 대상 문서
+
+| 파일 | 변경 영역 |
+|---|---|
+| `docs/architecture/2026-05-23-code-architecture.md` | §1.2 (ports as folder), §3 (sum types — 변경 없음, 명시만 강화), §5 (Clock Protocol), §8 (Persistence 재작성), §9 (Naming `*Repo` 허용), §10 (Fakes pattern + InMemoryDataset), §UoW 신설 (§3.5 또는 §11) |
+| `.claude/rules/backend-code-architecture.md` | §1 (ports as folder), §4 (Clock Protocol), §6 (ORM containment rule + UoW), §9 (`*Repo` 허용), §10 (fakes pattern), 끝에 reference 명시 |
+| `docs/plans/2026-05-22-phase-1-single-factory-vertical-slice.md` | known conflicts에 (e)~(h) 추가 — header만, body 무손상 |
+| `MEMORY.md` + `reference_codebase.md` | reference memory 추가 |
+
+### §10.6 실행 commit 순서 (9 commits 확정)
+
+1. **(현재 commit)** §10 verified findings + decisions inline 추가.
+2. ADR-0019 (ORM containment) + ADR-0020 (UoW) — coupled.
+3. ADR-0021 (ClockPort) + ADR-0022 (Ports folder).
+4. ADR-0023 (importlinter) + ADR-0024 (Fakes).
+5. arch doc 업데이트 (one big Write).
+6. rules file 업데이트.
+7. Phase 1 plan header 업데이트.
+8. reference memory + MEMORY.md.
+9. plan archive로 이동 + AI-WORKFLOW case-01 작성 검토.
 
 ---
 
-**End of temporary plan. /clear 후 §9 Resume guide부터 시작.**
+**End of temporary plan. /clear 후 §9 Resume guide부터 시작 — 단 verify 완료, §10이 frozen source이므로 step 2 (ADR-0019 작성)로 바로 진입.**
