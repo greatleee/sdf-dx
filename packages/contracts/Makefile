@@ -14,7 +14,7 @@ kotlin:
 
 openapi-python:
 	mkdir -p $(PYTHON_OUT)
-	uvx --from datamodel-code-generator datamodel-codegen \
+	uvx --from datamodel-code-generator==0.45.0 datamodel-codegen \
 	  --input openapi/sdf-api.yaml --input-file-type openapi \
 	  --output $(PYTHON_OUT)/sdf_openapi_models.py \
 	  --output-model-type pydantic_v2.BaseModel \
@@ -24,7 +24,7 @@ openapi-python:
 
 openapi-typescript:
 	mkdir -p $(TS_OUT)
-	pnpm dlx openapi-typescript openapi/sdf-api.yaml \
+	pnpm dlx openapi-typescript@7.13.0 openapi/sdf-api.yaml \
 	  -o $(TS_OUT)/sdf-openapi-client.ts
 
 # One flat module per payload schema. datamodel-codegen rejects a single-file
@@ -33,14 +33,14 @@ openapi-typescript:
 # keeps codegen/python flat and honors the rule's file-per-payload layout.
 kafka-python:
 	mkdir -p $(PYTHON_OUT)
-	uvx --from datamodel-code-generator datamodel-codegen \
+	uvx --from datamodel-code-generator==0.45.0 datamodel-codegen \
 	  --input kafka-payloads/machine_telemetry.schema.json --input-file-type jsonschema \
 	  --output $(PYTHON_OUT)/machine_telemetry.py \
 	  --output-model-type pydantic_v2.BaseModel \
 	  --target-python-version 3.12 \
 	  --use-standard-collections --use-union-operator \
 	  --disable-timestamp
-	uvx --from datamodel-code-generator datamodel-codegen \
+	uvx --from datamodel-code-generator==0.45.0 datamodel-codegen \
 	  --input kafka-payloads/line_state.schema.json --input-file-type jsonschema \
 	  --output $(PYTHON_OUT)/line_state.py \
 	  --output-model-type pydantic_v2.BaseModel \
@@ -50,7 +50,7 @@ kafka-python:
 
 # Quality gate (ADR-0005 D-3 #1): lint the spec BEFORE any codegen runs.
 lint:
-	pnpm dlx @stoplight/spectral-cli lint \
+	pnpm dlx @stoplight/spectral-cli@6.16.0 lint \
 	  --ruleset openapi/.spectral.yaml \
 	  openapi/sdf-api.yaml
 
