@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Date** | 2026-05-23 |
-| **Status** | Draft — initial body. |
+| **Date** | 2026-05-23 (aligned with `the reference codebase` reference per ADR-0019~0024 same day) |
+| **Status** | Draft — initial body + reference alignment. |
 | **Layer** | Engineering Conventions (see `docs/SOT-LAYERS.md`) |
 | **Scope** | Backend code-level conventions for Python + Kotlin. Frontend has its own conventions (TBD). |
 | **Audience** | Self (future me), LLM pair, portfolio reviewer reading code first. |
@@ -18,14 +18,18 @@
 1. **FC/IS** — domain code is pure, IO at shell. Spec §2.1.
 2. **Core returns failures as values** (sealed class / tagged union). Shell may throw at boundary.
 3. **Core may not read clock / uuid / random** — these are injected from shell.
-4. **DDD tactical**: Value Object ✓ / Aggregate concept ✓ (data + pure functions, no OO methods) / Repository ✗ (use `Reader`/`Writer` ports) / Domain Service term ✗ / Domain Event = pure value returned by core.
-5. **shared_kernel**: IDs + cross-cutting VOs only. No aggregates, no services, no cross-BC events.
-6. **Cross-BC sync query**: top-level `src/sdf_api/use_cases/`. BCs stay peers (import-linter `independence` contract enforced).
+4. **DDD tactical**: Value Object ✓ / Aggregate concept ✓ (data + pure functions, no OO methods) / DDD-classical Repository ✗ (no domain-interface-with-infra-impl); `*Repo` *suffix* is allowed as general persistence vocabulary on adapter classes (ADR-0019) / Domain Service term ✗ / Domain Event = pure value returned by core.
+5. **shared_kernel**: IDs + cross-cutting VOs only. Plus the cross-cutting Ports `ClockPort` (ADR-0021) and `DomainEventDispatcher`. No aggregates, no services, no cross-BC events.
+6. **Cross-BC sync query**: top-level `src/sdf_api/use_cases/`. BCs stay peers (import-linter `bc-independence` contract enforced; ADR-0023).
 7. **Cross-BC state propagation**: in-process `DomainEventDispatcher`, fail-fast. No Kafka for domain events.
 8. **Cross-aggregate (same BC)**: 1 transaction = 1 aggregate. Multi-aggregate orchestration in application/use-case layer.
-9. **ORM**: avoid object-relational mappers that pollute domain (JPA, SQLAlchemy ORM). Use Exposed/JOOQ (Kotlin) or SQLAlchemy Core / asyncpg raw (Python).
-10. **Pydantic**: shell boundary only (HTTP DTO, JSON parsing, OpenAPI). Domain uses stdlib `@dataclass(frozen=True, slots=True)`.
-11. **Test pyramid**: domain tests = 0 mock / 0 stub / 0 fake / sub-second. Spec §7.
+9. **Persistence** (Python): SQLAlchemy 2.0 ORM is allowed under containment rules — private `_Base`/`_X` ORM classes, public adapter (`*Repo`) returns domain types or primitives, adapter does not commit (UoW does). Domain never imports `sqlalchemy.*`. ADR-0019 + ADR-0020. Kotlin: Exposed (DSL) or JOOQ (codegen); JPA is forbidden in domain.
+10. **Pydantic**: shell boundary only (HTTP DTO, JSON parsing, OpenAPI). Domain uses stdlib `@dataclass(frozen=True, slots=True)`. ADR-0018 (status quo — intentional divergence from `the reference codebase` reference; see ADR for reasoning).
+11. **Clock injection**: always `ClockPort` Protocol (Python) / `java.time.Clock` (Kotlin). `Callable[[], datetime]` is retired. ADR-0021.
+12. **Unit of Work**: use cases own the transaction boundary via `async with self._uow_factory() as uow:` + `await uow.commit()`. Per-BC `UnitOfWork` Protocol; no cross-BC atomic tx. ADR-0020.
+13. **Ports**: `contexts/<bc>/ports/` is a folder, file-per-feature (Port noun in snake_case, no suffix). Cross-cutting Ports in `shared_kernel/ports/`. ADR-0022.
+14. **Fakes**: `tests/contexts/<bc>/fakes.py` per BC. Working in-memory implementations of Ports + `InMemoryDataset` shared mutable state. Not mocks. ADR-0024.
+15. **Test pyramid**: domain tests = 0 mock / 0 stub / 0 fake / sub-second. Spec §7.
 
 ---
 
@@ -45,11 +49,16 @@ Test purity, drift toolchain, BC isolation, and reviewer-readability all derive 
 |---|---|
 | `src/sdf_api/contexts/<bc>/domain/` (Python) | Core |
 | `apps/*/src/main/kotlin/**/domain/` (Kotlin) | Core |
+| `src/sdf_api/contexts/<bc>/ports/` *(folder, file-per-feature; ADR-0022)* | Core (Port Protocols only — no IO) |
 | `src/sdf_api/contexts/<bc>/application/` | Shell (BC-local use cases) |
 | `src/sdf_api/contexts/<bc>/adapters/` | Shell (IO) |
 | `src/sdf_api/use_cases/` | Shell (cross-BC use cases — see §3.2) |
-| `src/sdf_api/shared_kernel/` | Core (cross-BC pure values only — see §6) |
+| `src/sdf_api/shared_kernel/` | Core (cross-BC pure values + cross-cutting Ports — see §6) |
+| `src/sdf_api/shared_kernel/ports/` | Core (cross-cutting Port Protocols: `ClockPort` per ADR-0021, etc.) |
 | `src/sdf_api/composition.py` | Shell (wiring root) |
+| `backend/tests/contexts/<bc>/fakes.py` | Test (in-memory Port implementations + `InMemoryDataset`; ADR-0024) |
+| `backend/tests/shared_kernel/fakes.py` | Test (cross-cutting fakes: `FixedClock`, etc.) |
+| `backend/tests/architecture/` | Test (import-linter contracts + AST checks; ADR-0023) |
 
 ### §1.3 What core may not do
 
@@ -77,7 +86,7 @@ Each DDD tactical pattern maps to one of: core / shell / dropped. Where the term
 | Value Object | Core | ✓ | `@dataclass(frozen=True, slots=True)` (Python) / `data class` with `val` (Kotlin). |
 | Aggregate | Core (data + pure functions) | ✗ | "Domain module root data type". No OO methods, no self-mutation. Behavior in module-level functions, not on the type. |
 | Domain Event | Core returns as value | ✓ | Past-tense verb, no `Event` suffix: `LineWentDown`, `OrderPlaced`. Part of sum-type return from core; dispatched in shell. |
-| Repository | Shell only | ✗ | `<Noun>Reader` / `<Noun>Writer` ports (`Protocol` in Python, `interface` in Kotlin). No "domain interface, infra impl" abstraction; just ports + adapters. |
+| Repository (DDD-classical "domain interface + infra impl") | Shell only | ✗ | Just Ports + Adapters; no "domain interface declared in core, implementation in infra" extra layer. *Suffix* `*Repo` is allowed on adapter and port classes (general persistence vocabulary, not DDD-classical marker) per ADR-0019. `<Noun>Reader` / `<Noun>Writer` / `<Noun>Port` / `<Noun>Repo` all available; pick by concrete role. |
 | Domain Service | Split | ✗ | Pure logic → module-level function in `domain/`. Mixed-with-IO → use case in `application/`. The term itself is not used in code or docs. |
 | Factory | Core (just a function) | ✗ | Module-level function, often `make_<noun>` or just the constructor. No `Factory` suffix. |
 | Entity (with identity) | Core (data + transition functions) | ✓ (limited) | Same shape as Aggregate. ID equality, no method-based self-mutation. |
@@ -86,9 +95,9 @@ Each DDD tactical pattern maps to one of: core / shell / dropped. Where the term
 ### §2.1 Naming consequences
 
 - **No `*Service` suffix** in domain code (it would imply Domain Service, which we've dropped).
-- **No `*Repository`** anywhere — `LineStateReader`, `LineStateWriter` instead.
+- **No `*Repository`** anywhere (DDD-classical "Repository pattern" abstraction is the rejected concept). `*Repo` *suffix* IS allowed on adapter and port classes per ADR-0019 — it is general persistence vocabulary, not a DDD marker. Examples: `PostgresOrdersRepo`, `AdminLineRepo`.
 - **No `*Factory`** — `make_topology(...)` or just call the dataclass.
-- **Ports**: `<Noun>Reader` (read-only), `<Noun>Writer` (write-only), or `<Noun>Port` if both. Lives in `contexts/<bc>/ports.py` (Python) or `<package>/ports/` (Kotlin).
+- **Ports**: `<Noun>Reader` (read-only), `<Noun>Writer` (write-only), `<Noun>Port`, `<Noun>Repo`, `<Noun>Ledger` — pick by concrete role. Lives in `contexts/<bc>/ports/<noun>.py` (Python folder, file-per-feature; ADR-0022) or `<package>/ports/` (Kotlin). Cross-cutting Ports in `shared_kernel/ports/`.
 - **State transitions**: `apply_<event>(state, event) -> <Outcome>`. Pure function on the domain root, never a method.
 
 ---
@@ -112,36 +121,47 @@ src/sdf_api/
 ├── contexts/
 │   ├── monitoring/
 │   │   ├── domain/
-│   │   ├── application/    ← BC-local use cases only
+│   │   ├── application/         ← BC-local use cases only
 │   │   ├── adapters/
-│   │   └── ports.py
+│   │   └── ports/               ← folder, file-per-feature (ADR-0022)
+│   │       ├── __init__.py
+│   │       ├── line_state.py
+│   │       ├── line_event.py
+│   │       └── unit_of_work.py  ← per-BC UoW Protocol (ADR-0020)
 │   └── topology/
 │       └── ...
-├── use_cases/               ← cross-BC ONLY
+├── use_cases/                   ← cross-BC ONLY
 │   └── get_line_with_meta.py
 ├── shared_kernel/
+│   ├── ports/                   ← cross-cutting Ports (ADR-0021/0022)
+│   │   └── clock.py             ← ClockPort
+│   └── events.py                ← DomainEventDispatcher
 └── composition.py
 ```
 
 #### Rules
 
-- A file in `use_cases/` may import multiple BCs' `ports.py`.
-- A file in `use_cases/` may **not** import any BC's `domain/` or `adapters/` directly.
-- A file in `contexts/<bc>/application/` may **not** import any other BC at all. (`import-linter` `independence` contract stays in force between BCs.)
+- A file in `use_cases/` may import multiple BCs' `ports/` files.
+- A file in `use_cases/` may **not** import any BC's `domain/` or `adapters/` directly. (`use-cases-no-domain-or-adapters` contract — ADR-0023 #4.)
+- A file in `contexts/<bc>/application/` may **not** import any other BC at all. (`bc-independence` contract — ADR-0023 #5.)
+- A file in `contexts/<bc>/adapters/` may **not** import `ports/`, `application/`, or `use_cases/` upward. Port satisfaction is structural; composition root acknowledges with `cast(...)`. (`adapters-no-upward` contract — ADR-0023 #6.)
 - The composition root (`composition.py`) wires concrete adapters into both BC-local and cross-BC use cases.
 
 #### Example
 
 ```python
-# contexts/monitoring/ports.py
+# contexts/monitoring/ports/line_state.py
 class LineStateReader(Protocol):
     async def latest(self, line_id: LineId) -> LineStateSnapshot | NotFound: ...
 
-# contexts/topology/ports.py
+# contexts/topology/ports/line.py
 class TopologyReader(Protocol):
     async def line(self, line_id: LineId) -> Line | NotFound: ...
 
 # use_cases/get_line_with_meta.py
+from sdf_api.contexts.monitoring.ports.line_state import LineStateReader
+from sdf_api.contexts.topology.ports.line import TopologyReader
+
 async def get_line_with_meta(
     line_id: LineId,
     monitoring: LineStateReader,
@@ -364,36 +384,52 @@ Shell injects the value or a callable at the use-case boundary.
 
 ### §5.2 Python idiom
 
-Function-argument injection (simpler) or a `Clock` Protocol (when multiple methods are needed).
+Always a `ClockPort` Protocol — `Callable[[], datetime]` is retired (ADR-0021). The Protocol lives in `shared_kernel/ports/clock.py` because clock is a cross-cutting concern shared by every BC.
 
 ```python
-# Pure — value injected
+# shared_kernel/ports/clock.py
+from datetime import datetime
+from typing import Protocol
+
+
+class ClockPort(Protocol):
+    def now(self) -> datetime: ...
+
+
+# Pure — value injected as parameter
 def apply_event(state: State, event: Event, at: datetime) -> ApplyOutcome: ...
 
-# Shell — reads clock, passes value to core
-async def handle_telemetry(
-    event: TelemetryEvent,
-    ...,
-    now: Callable[[], datetime],
-) -> None:
-    outcome = apply_event(state, event, at=now())
-    ...
 
-# composition.py
-from datetime import datetime, UTC
-real_now = lambda: datetime.now(UTC)
+# Shell — use case takes ClockPort, passes value to core
+class HandleTelemetryUseCase:
+    def __init__(self, ..., clock: ClockPort) -> None:
+        self._clock = clock
 
-# tests
-fixed_now = lambda: datetime(2026, 5, 23, 12, 0, tzinfo=UTC)
+    async def execute(self, event: TelemetryEvent) -> None:
+        outcome = apply_event(state, event, at=self._clock.now())
+        ...
+
+
+# adapters/system_clock.py — production binding
+from datetime import UTC, datetime
+
+class SystemClock:
+    def now(self) -> datetime:
+        return datetime.now(tz=UTC)
+
+
+# tests/shared_kernel/fakes.py — test binding (ADR-0024)
+class FixedClock:
+    def __init__(self, frozen: datetime) -> None:
+        self._frozen = frozen
+
+    def now(self) -> datetime:
+        return self._frozen
 ```
 
-For multiple system reads, group into a Protocol:
+If a second method ever lands (e.g., `monotonic()`), it extends the same `ClockPort` Protocol — no breaking refactor.
 
-```python
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-    def new_id(self) -> UUID: ...
-```
+UUID / randomness use the same shape: a `UUIDPort` / `RandomPort` Protocol in `shared_kernel/ports/`, real `SystemUUID` / `SystemRandom` adapters, `FixedUUID` / `SeededRandom` fakes.
 
 ### §5.3 Kotlin idiom
 
@@ -424,9 +460,11 @@ Domain tests pass explicit timestamps (`at=datetime(2026, 5, 23, ...)`); never `
 
 ### §5.5 Enforcement
 
-Detail in §9. Summary:
-- Python: `import-linter` blocks importing `datetime.datetime.now` / `uuid.uuid4` / `random` / `time.time` *from inside* `contexts.*.domain`. Type imports (`from datetime import datetime`) are allowed.
-- Kotlin: Konsist rule forbids calls to `Instant.now()` / `UUID.randomUUID()` from domain packages.
+Detail in §9 + ADR-0023. Summary:
+- Python `import-linter`: `domain-no-system-reads` contract blocks module-level `random` / `secrets` imports from `contexts.*.domain` and `shared_kernel/` (ADR-0023 #1).
+- Python AST checks (`tests/architecture/test_call_sites.py`): blocks call expressions `datetime.now(` / `datetime.utcnow(` / `time.time(` / `uuid.uuid4(` inside the same scope (ADR-0023 A1, A2). Lint-tool granularity cannot see call sites, only imports.
+- Kotlin Konsist: K1 forbids `Instant.now()` / `UUID.randomUUID()` / `System.currentTimeMillis()` calls inside `..domain..` packages.
+- Type imports (`from datetime import datetime`; `import java.time.Instant`) remain allowed — the rule is *no system reads*, not *no time types*.
 
 ---
 
@@ -437,6 +475,7 @@ Detail in §9. Summary:
 - **Typed IDs**: UUID newtype wrappers (`FactoryId`, `LineId`, `MachineId`, `TenantId`).
 - **Cross-cutting VOs**: `Tenant`, timezone-aware `Timestamp` wrapper, currency-like primitives — values used identically by multiple BCs.
 - **`DomainEventDispatcher`** interface and base `DomainEvent` marker (§3.3).
+- **Cross-cutting Ports** in `shared_kernel/ports/<name>.py`: `ClockPort` (ADR-0021), and any future cross-cutting Port (e.g., `UUIDPort`, `RandomPort`, an outbox port if introduced).
 - **Generic protocols / typing utilities** used by multiple BCs.
 
 ### §6.2 Forbidden
@@ -445,6 +484,7 @@ Detail in §9. Summary:
 - Domain services or use cases.
 - BC-spanning events with semantics owned by a specific BC. (E.g., `LineWentDown` lives in `contexts/monitoring/domain/`, *not* `shared_kernel/`, even though `quality` subscribes to it.)
 - Anything that depends on a specific BC's domain types.
+- **`UnitOfWork` Protocol is per-BC, not in `shared_kernel/`** (ADR-0020). Each BC's UoW exposes only that BC's repo attributes, reinforcing ADR-0009 (no cross-BC atomic tx). A global UoW with all BCs' repos was deliberately rejected.
 
 ### §6.3 Rationale
 
@@ -462,7 +502,7 @@ The architectural rule is the same in both languages; only the syntax differs. T
 | Sum type | `sealed interface Outcome` + `data class` cases | tagged union with `\|` and `@dataclass(frozen=True)` cases |
 | Pattern match | `when (x) { is A -> ...; is B -> ... }` (exhaustive) | `match x: case A(): ...; case B(): ...` |
 | New-type ID | `@JvmInline value class LineId(val v: UUID)` | `@dataclass(frozen=True, slots=True) class LineId: value: UUID` |
-| DI (clock) | constructor inject `java.time.Clock` | function arg `now: Callable[[], datetime]` or `Clock` Protocol |
+| DI (clock) | constructor inject `java.time.Clock` | constructor inject `ClockPort` Protocol from `shared_kernel/ports/clock.py` (ADR-0021) |
 | Async | `suspend fun` | `async def` |
 | Module visibility | `internal` keyword + `-Xexplicit-api=strict` | leading underscore convention + `import-linter` |
 | Pure enforcement | Konsist arch tests + `suspend` makes IO partially formal | `import-linter` `forbidden` contracts |
@@ -472,40 +512,79 @@ The architectural rule is the same in both languages; only the syntax differs. T
 
 ---
 
-## §8. Persistence — ORM caution + Pydantic boundary
+## §8. Persistence — ORM containment + UoW + Pydantic boundary
+
+This section integrates ADR-0019 (ORM containment), ADR-0020 (Unit of Work), and ADR-0018 (Pydantic at boundary only). The persistence layer has three rules, not one.
 
 ### §8.1 ORM rules
 
-- **Forbidden in core**: any ORM that requires annotations or inheritance on domain types.
+- **Forbidden in core**: any ORM declaration on domain types.
   - Kotlin: **no JPA** (`@Entity`, `@Id` on domain types pollutes core; lazy-loading and change-tracking violate purity).
-  - Python: **no SQLAlchemy ORM declarative base** on domain types for the same reason.
-- **Allowed at adapters**:
-  - Kotlin: **Exposed** (DSL — separate from domain types) or **JOOQ** (codegen — generated types stay in adapter package).
-  - Python: **SQLAlchemy Core** (Core, not ORM) or **`asyncpg`** raw.
+  - Python: **no SQLAlchemy ORM declarative base** on domain types. `class Order(Base)` is rejected if `Order` is a domain type.
+- **Allowed at adapters with containment** (Python, ADR-0019):
+  - **SQLAlchemy 2.0 ORM is allowed inside the adapter file** under five containment rules:
+    1. ORM declarative class is *private* (underscore prefix: `class _Base(DeclarativeBase): pass`, `class _Order(_Base): ...`).
+    2. Adapter public methods return domain types or primitives only — never an `_Order` instance or a `Row[...]`.
+    3. Adapter constructor takes `AsyncSession`, does not own engine, does not commit (UoW does — §8.5).
+    4. No class-level Port inheritance. Port satisfaction is structural; composition root acknowledges with `cast(Port, AdapterImpl(session))` (`adapters-no-upward` contract, ADR-0023 #6).
+    5. DB-side `GENERATED` columns mirrored via `Computed("expr", persisted=True)`; adapter does not pass those columns in INSERT/UPDATE.
+  - SQLAlchemy Core / `asyncpg` raw also remain available — pick by adapter need.
+- **Allowed at adapters** (Kotlin): **Exposed** (DSL — separate from domain types) or **JOOQ** (codegen — generated types stay in adapter package).
 
-### §8.2 Adapter pattern
+### §8.2 Adapter pattern (Python, ORM containment example)
 
-Domain types must be constructible without DB knowledge. Adapter maps DB rows → domain factory:
+Domain types remain constructible without DB knowledge. Adapter maps `_Order` ORM rows in/out at the file boundary:
 
 ```python
-# adapters/postgres_line_state.py
-class PgLineStateReader(LineStateReader):
-    def __init__(self, conn: asyncpg.Connection) -> None:
-        self._conn = conn
+# adapters/postgres_orders.py
+from sqlalchemy import BigInteger, Computed, Integer, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-    async def latest(self, line_id: LineId) -> LineStateSnapshot | NotFound:
-        row = await self._conn.fetchrow(
-            "SELECT state, time FROM line_state WHERE line_id = $1 ORDER BY time DESC LIMIT 1",
-            line_id.value,
-        )
-        if row is None:
-            return NotFound(reason="no state recorded")
-        return LineStateSnapshot(
+
+class _Base(DeclarativeBase):
+    pass
+
+
+class _Order(_Base):
+    __tablename__ = "orders"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    line_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    quantity_total: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    quantity_filled: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    quantity_remaining: Mapped[int] = mapped_column(
+        BigInteger,
+        Computed("quantity_total - quantity_filled", persisted=True),
+        nullable=False,
+    )
+    # ... other columns
+
+
+class PostgresOrdersRepo:
+    """Public surface. Returns domain types / primitives only.
+
+    Satisfies ports.orders.OrdersRepoPort structurally — no class-level
+    inheritance (ADR-0019 rule 4 + ADR-0023 adapters-no-upward).
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def insert_order(
+        self, *, line_id: int, quantity_total: int,
+    ) -> int:
+        # Never pass quantity_remaining — Postgres computes it (rule 5).
+        row = _Order(
             line_id=line_id,
-            state=row["state"],
-            since=row["time"],
+            quantity_total=quantity_total,
+            quantity_filled=0,
         )
+        self._s.add(row)
+        await self._s.flush()  # no commit — UoW owns the boundary
+        return int(row.id)
 ```
+
+For `asyncpg` raw or SQLAlchemy Core adapters (still valid), the shape is the same: adapter takes session/connection, returns domain types or primitives, does not commit.
 
 ### §8.3 Pydantic position
 
@@ -519,49 +598,234 @@ class PgLineStateReader(LineStateReader):
 
 The boundary DTO is a *separate type* from the domain type, with explicit `from_domain` / `to_domain` conversion. They are not the same class.
 
-Rationale (decided 2026-05-23):
+Rationale (decided 2026-05-23, full version in ADR-0018):
 - Pydantic models are pure data containers + sync validation — they don't break test purity. But:
 - Putting Pydantic in domain conflates *input shape validation* (Pydantic's job) with *domain invariant validation* (sum types and functions). The literature (cosmic-python, "Architecture Patterns with Python") explicitly separates the two.
 - Serialization knowledge (`.model_dump_json()`) leaks into core if Pydantic lives there. JSON is a boundary concern.
 - Pydantic v1→v2 was a breaking API change; coupling domain to Pydantic API decisions is unnecessary risk.
 - The current Phase 1 plan already uses stdlib dataclass for domain — this rule is consistent with existing code.
 
+**Intentional divergence from `the reference codebase` reference**: the reference impl uses `Pydantic BaseModel` with `ConfigDict(frozen=True, extra="forbid")` throughout `domain/`. We deliberately stay with `@dataclass(frozen=True, slots=True)` to keep the boundary-validation / domain-invariant separation visible by file location. ADR-0018 documents the call; this is not an oversight, it is a chosen line. The other reference patterns (ORM containment, UoW, ClockPort, fakes layout, importlinter) *are* adopted — see ADR-0019 through 0024.
+
 ### §8.4 Anti-patterns
 
 - ❌ Returning a Pydantic model from a domain function.
 - ❌ Adding `@field_validator` for domain invariants on a Pydantic DTO. (Domain invariants live in core sum types and functions, not boundary types.)
-- ❌ Letting a SQLAlchemy ORM `class Order(Base)` be a "domain entity."
+- ❌ Letting a SQLAlchemy ORM `class Order(Base)` be a "domain entity." (ORM declarations stay inside the adapter file with underscore prefix — §8.1 / ADR-0019.)
+- ❌ ORM declarative class without underscore prefix at module level. The privacy marker is the load-bearing signal that the class is adapter-internal.
+- ❌ Returning `_Order` (or any ORM `Mapped[...]` instance) from an adapter public method. ORM rows convert to domain types or primitives *at the file boundary*.
+- ❌ Adapter calling `await self._session.commit()`. The use case owns the commit boundary via UoW (§8.5 / ADR-0020).
+- ❌ Adapter class with `class PostgresOrdersRepo(OrdersRepoPort)` inheritance. Port satisfaction is structural; composition root acknowledges with `cast(...)` (`adapters-no-upward` contract — ADR-0023 #6).
+- ❌ Use case touching `uow.session` directly. The session escape hatch belongs to `composition.py` only (AST check A3 — ADR-0023).
+- ❌ Global UoW spanning multiple BCs. UoW is per-BC; cross-BC operations open multiple UoWs in sequence (ADR-0020, ADR-0009).
+
+### §8.5 Unit of Work — transaction boundary owned by use cases
+
+Per ADR-0020. The adapter never commits (§8.1 rule 3); the use case opens a UoW, performs writes through the bound repos, calls `commit()` on success, and lets `__aexit__` roll back on exception.
+
+**Protocol location**: `contexts/<bc>/ports/unit_of_work.py` — *per BC, not in `shared_kernel/`*. A global UoW with all BCs' repos was deliberately rejected (ADR-0020 §Decision) because it would invite cross-BC atomic writes, contradicting ADR-0009.
+
+```python
+# contexts/monitoring/ports/unit_of_work.py
+from types import TracebackType
+from typing import Protocol
+
+from sdf_api.contexts.monitoring.ports.line_event import LineEventWriter
+from sdf_api.contexts.monitoring.ports.line_state import LineStateReader
+from sdf_api.contexts.monitoring.ports.audit_log import AuditLogRepo
+
+
+class UnitOfWork(Protocol):
+    """Per-BC async transaction boundary. Use cases program against this."""
+
+    # Per-feature repo attributes — each Port the BC uses.
+    line_events: LineEventWriter
+    line_states: LineStateReader
+    audit_logs: AuditLogRepo
+
+    async def __aenter__(self) -> "UnitOfWork": ...
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None: ...
+    async def commit(self) -> None: ...
+    async def rollback(self) -> None: ...
+```
+
+```python
+# contexts/monitoring/adapters/sqlalchemy_uow.py
+class SqlAlchemyUnitOfWork:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+        self._session: AsyncSession | None = None
+
+    @property
+    def session(self) -> AsyncSession:
+        """Composition-root-only escape hatch. Use cases never touch this.
+
+        AST check A3 (ADR-0023) restricts access to composition.py.
+        """
+        assert self._session is not None
+        return self._session
+
+    async def __aenter__(self) -> "SqlAlchemyUnitOfWork":
+        self._session = self._session_factory()
+        # Bind per-feature repos to the fresh session.
+        self.line_events = PostgresLineEventWriter(self._session)
+        self.line_states = PostgresLineStateReader(self._session)
+        self.audit_logs = PostgresAuditLogRepo(self._session)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        assert self._session is not None
+        try:
+            if exc_type is not None:
+                await self._session.rollback()
+        finally:
+            await self._session.close()
+            self._session = None
+
+    async def commit(self) -> None:
+        await self.session.commit()
+
+    async def rollback(self) -> None:
+        await self.session.rollback()
+```
+
+```python
+# contexts/monitoring/application/record_line_event.py
+class RecordLineEventUseCase:
+    def __init__(
+        self,
+        uow_factory: Callable[[], UnitOfWork],
+        clock: ClockPort,
+    ) -> None:
+        self._uow_factory = uow_factory
+        self._clock = clock
+
+    async def execute(self, event: TelemetryEvent) -> RecordOutcome:
+        async with self._uow_factory() as uow:
+            current = await uow.line_states.latest(event.line_id)
+            if isinstance(current, NotFound):
+                return Rejected(reason="line_not_found")
+            outcome = apply_event(current.state, event, at=self._clock.now())
+            match outcome:
+                case Rejected():
+                    return outcome
+                case StateChange(new_state, events):
+                    for ev in events:
+                        await uow.line_events.append(ev)
+                    await uow.audit_logs.append(...)
+                    await uow.commit()
+                    return Ok(state=new_state)
+```
+
+**Session-bound adapters that are not part of the published UoW Protocol** (e.g., cross-system readers, use-case-scoped adapters) take the session from `uow.session` *at the composition root* and are injected into the use case as a separate factory parameter. The use case still never reads `uow.session`.
+
+**`async_sessionmaker` config**: production uses `async_sessionmaker(engine, expire_on_commit=False)` — async post-commit lazy-load implicitly awaits, a documented async foot-gun.
+
+**Fakes**: `FakeUnitOfWork(dataset: InMemoryDataset)` implements the same Protocol with in-memory backing — see §8.6 and ADR-0024.
+
+### §8.6 Test fakes — `InMemoryDataset` + per-BC working implementations
+
+Per ADR-0024. Fakes live at `backend/tests/contexts/<bc>/fakes.py` and `backend/tests/shared_kernel/fakes.py` (cross-cutting fakes like `FixedClock`).
+
+Three discipline points:
+
+1. **Fakes are working implementations, not mocks.** Each fake satisfies the production Port Protocol structurally. State mutates on writes; reads return the mutated state. DB-side constraints relevant to behavior (`GENERATED` columns, biconditional `CHECK`s) are mirrored. The rule: *the fake fails the same kinds of inputs the real adapter fails*.
+
+2. **`InMemoryDataset` per BC** holds the BC's shared mutable state. A `FakeUnitOfWork` instance wraps one dataset and constructs each per-feature fake around it, so all repos within one UoW see one source of truth — mirroring the real session-bound adapter pattern.
+
+   ```python
+   # tests/contexts/monitoring/fakes.py
+   @dataclass
+   class MonitoringInMemoryDataset:
+       line_events: list[LineEvent] = field(default_factory=list)
+       line_states: dict[LineId, LineStateProjection] = field(default_factory=dict)
+       audit_logs: list[AuditLogEntry] = field(default_factory=list)
+
+
+   class FakeUnitOfWork:
+       def __init__(self, dataset: MonitoringInMemoryDataset) -> None:
+           self._dataset = dataset
+           self.line_events = FakeLineEventWriter(dataset)
+           self.line_states = FakeLineStateReader(dataset)
+           self.audit_logs = FakeAuditLogRepo(dataset)
+           self.committed = False
+           self.rolled_back = False
+
+       async def __aenter__(self): return self
+       async def __aexit__(self, exc_type, exc_val, exc_tb):
+           if exc_type is not None:
+               await self.rollback()
+       async def commit(self): self.committed = True
+       async def rollback(self): self.rolled_back = True
+   ```
+
+3. **No assertion-on-call.** Tests assert on observable outcomes (dataset state, returned domain values, sum-type variants), never on whether a method was called or with what arguments. `committed` / `rolled_back` flags on `FakeUnitOfWork` are state, not call traces.
+
+   ```python
+   async def test_record_line_event_persists_and_commits() -> None:
+       dataset = MonitoringInMemoryDataset(
+           line_states={line_id: LineStateProjection(state="UP", since=...)},
+       )
+       uow_factory = lambda: FakeUnitOfWork(dataset)
+       clock = FixedClock(frozen=datetime(2026, 5, 23, 12, 0, tzinfo=UTC))
+
+       use_case = RecordLineEventUseCase(uow_factory, clock)
+       result = await use_case.execute(make_telemetry_event(...))
+
+       assert isinstance(result, Ok)
+       assert len(dataset.line_events) == 1
+       assert dataset.audit_logs[0].action_key == "line.state_change"
+   ```
+
+Cross-BC use-case tests instantiate *one dataset per BC* — never one shared dataset across BCs. This mirrors ADR-0020's per-BC UoW: no cross-BC atomic boundary, even in tests.
+
+Optional `call_log: list[str]` parameter on fakes is the only sanctioned escape from the no-call-assertion rule, and only for cross-fake call *ordering* (lock-then-read), never for argument inspection.
 
 ---
 
 ## §9. Lint / enforcement — delta over spec §6
 
-Spec §6 already has the full per-language drift toolchain matrix. This section adds the *additional* contracts implied by §3, §4, §5, §6, §8 above.
+Spec §6 already has the full per-language drift toolchain matrix. This section provides the TOML / Kotlin code samples for the contract set; **the contract list itself is owned by ADR-0023** (single source of truth — changes land in the ADR first, code samples here mirror).
 
-### §9.1 Python — `import-linter` contracts to add
+### §9.1 Python — `import-linter` contracts (full list)
+
+ADR-0023 names seven Python contracts (#1–#7). TOML for each (`backend/pyproject.toml`):
 
 ```toml
-# 1. Domain may not read system clock / UUID / randomness
+# 1. domain-no-system-reads — ADR-0017
 [[tool.importlinter.contracts]]
-name = "domain may not read system clock / uuid / random"
+name = "domain-no-system-reads"
 type = "forbidden"
-source_modules = ["sdf_api.contexts.*.domain"]
+source_modules = ["sdf_api.contexts.*.domain", "sdf_api.shared_kernel"]
 forbidden_modules = ["random", "secrets"]
-# Note: import-linter is module-level. For `datetime.now` / `uuid.uuid4` call-site
-# enforcement we add a ruff custom rule or a small AST-walking pytest in
-# tests/architecture/ (see §9.3).
+# Note: call-site checks for datetime.now / uuid.uuid4 live in tests/architecture/
+# (§9.3, ADR-0023 A1/A2) — import-linter operates at module level only.
 
-# 2. Domain may not import Pydantic or other validation libs
+# 2. domain-no-validation-libs — ADR-0004 / ADR-0018
 [[tool.importlinter.contracts]]
-name = "domain may not import Pydantic or other validation libs"
+name = "domain-no-validation-libs"
 type = "forbidden"
-source_modules = ["sdf_api.contexts.*.domain"]
+source_modules = ["sdf_api.contexts.*.domain", "sdf_api.shared_kernel"]
 forbidden_modules = ["pydantic", "marshmallow", "attrs", "returns", "arrow"]
-# Note: 'arrow' here means the dateutil-flavored library, not arrow-kt.
+# 'arrow' = dateutil-flavored Python library, not arrow-kt.
 
-# 3. use_cases/ may import ports across BCs, but never domain or adapters
+# 3. domain-no-infrastructure — ADR-0004
 [[tool.importlinter.contracts]]
-name = "use_cases/ may import any BC's ports, but not their domain or adapters"
+name = "domain-no-infrastructure"
+type = "forbidden"
+source_modules = ["sdf_api.contexts.*.domain", "sdf_api.shared_kernel"]
+forbidden_modules = [
+  "sqlalchemy", "asyncpg", "aiokafka", "httpx", "fastapi", "redis", "pymemcache",
+]
+
+# 4. use-cases-no-domain-or-adapters — arch doc §3.2
+[[tool.importlinter.contracts]]
+name = "use-cases-no-domain-or-adapters"
 type = "forbidden"
 source_modules = ["sdf_api.use_cases"]
 forbidden_modules = [
@@ -569,8 +833,31 @@ forbidden_modules = [
   "sdf_api.contexts.*.adapters",
 ]
 
-# 4. BC application/ may not import another BC at all (independence stays)
-# This is already in Phase 1 plan as 'independence' contract — see plan Task 2.
+# 5. bc-independence — Phase 1 plan Task 2, arch doc §3
+# (Per BC; one contract per pair. Generated by a small Python helper that
+# enumerates BCs and emits one contract per pair to avoid hand-edit drift.)
+
+# 6. adapters-no-upward — ADR-0019 (new)
+[[tool.importlinter.contracts]]
+name = "adapters-no-upward"
+type = "forbidden"
+source_modules = ["sdf_api.contexts.*.adapters"]
+forbidden_modules = [
+  "sdf_api.contexts.*.ports",
+  "sdf_api.contexts.*.application",
+  "sdf_api.use_cases",
+]
+
+# 7. composition-only-imports-adapters — arch doc §1.2, open question O1
+[[tool.importlinter.contracts]]
+name = "composition-only-imports-adapters"
+type = "forbidden"
+source_modules = [
+  "sdf_api.contexts.*.application",
+  "sdf_api.use_cases",
+]
+forbidden_modules = ["sdf_api.contexts.*.adapters"]
+# composition.py is the sole importer of adapters/.
 ```
 
 ### §9.2 Kotlin — Konsist equivalents
@@ -601,9 +888,13 @@ fun `domain may not depend on persistence frameworks`() {
 
 ### §9.3 Custom checks (where lint-tool granularity is insufficient)
 
-A small `tests/architecture/` directory contains AST-walking tests for call-site enforcement that lint tools can't express at module level. Example: a test that walks every `.py` file under `contexts/*/domain/` and fails if it finds `datetime.now(`, `uuid.uuid4(`, etc. as call expressions.
+A small `tests/architecture/` directory contains AST-walking tests for call-site enforcement that lint tools can't express at module level. Per ADR-0023:
 
-This runs as part of the unit-test suite (always-on, sub-second).
+- **A1 — `domain-no-datetime-now`**: walks every `.py` file under `contexts/*/domain/` and `shared_kernel/`, fails if it finds call expressions `datetime.now(` / `datetime.utcnow(` / `time.time(`.
+- **A2 — `domain-no-uuid-call`**: same scope, fails on `uuid.uuid4(` / `uuid.uuid1(`.
+- **A3 — `uow-session-only-from-composition`**: the attribute access `uow.session` (or `<any>.session` where `<any>` is annotated as `UnitOfWork`) may appear only in `composition.py`. Use cases never read `uow.session`; the escape hatch belongs to the wiring layer (ADR-0020).
+
+These run as part of the unit-test suite (always-on, sub-second).
 
 ### §9.4 CI gate behavior
 
@@ -622,4 +913,4 @@ To resolve when concrete code lands or in a follow-up ADR:
 
 ---
 
-**End of body. ADRs to follow: ADR-4 (FC/IS) and ADR-9 (inter-context), plus new ADR for error-as-value + clock-injection if not subsumed.**
+**End of body. Active ADRs: 0004 (FC/IS), 0009 (inter-context), 0016 (error as value), 0017 (system-reads injection), 0018 (Pydantic at boundary only), 0019 (ORM containment), 0020 (Unit of Work), 0021 (ClockPort standardized), 0022 (Ports as folder), 0023 (importlinter contract set), 0024 (fakes with InMemoryDataset).**
