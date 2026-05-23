@@ -33,7 +33,7 @@ jobs:
             "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
           unzip -o /tmp/protoc.zip -d "$HOME/.protoc"
           echo "$HOME/.protoc/bin" >> "$GITHUB_PATH"
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           version: "0.11.7"
           enable-cache: true
