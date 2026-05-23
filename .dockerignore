@@ -1,0 +1,20 @@
+# Applies to the repo-root build context used by the Python service images
+# (apps/api-python, apps/ingest-python). The Kotlin image builds from its own
+# scoped context (apps/ot-gateway-kotlin) and is unaffected. Keep
+# packages/contracts/codegen/python and apps/*-python/{pyproject.toml,src}.
+.git
+.github
+.claude
+docs
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+**/build
+**/.gradle
+# Kotlin sources are not part of the Python images.
+apps/ot-gateway-kotlin
+# Tests are not copied into the runtime images.
+**/tests

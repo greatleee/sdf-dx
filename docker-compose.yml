@@ -74,7 +74,11 @@ services:
       redpanda: { condition: service_healthy }
 
   ingest:
-    build: ./apps/ingest-python
+    # Repo-root context so the image can install the generated `sdf_contracts`
+    # package alongside the app (contract-first §2); see the Dockerfile.
+    build:
+      context: .
+      dockerfile: apps/ingest-python/Dockerfile
     environment:
       KAFKA_BOOTSTRAP: redpanda:9092
       PG_DSN: postgresql://sdf:sdf@timescale:5432/sdf
@@ -83,12 +87,13 @@ services:
       redpanda:  { condition: service_healthy }
 
   api:
-    build: ./apps/api-python
+    build:
+      context: .
+      dockerfile: apps/api-python/Dockerfile
     ports: ["8000:8000"]
     environment:
       PG_DSN: postgresql://sdf:sdf@timescale:5432/sdf
       KAFKA_BOOTSTRAP: redpanda:9092
-      SDF_MODE: real
     depends_on:
       timescale: { condition: service_healthy }
       redpanda:  { condition: service_healthy }
