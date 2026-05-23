@@ -1,0 +1,16 @@
+complexity:
+  CyclomaticComplexMethod:
+    threshold: 12
+  LongMethod:
+    threshold: 60
+style:
+  MaxLineLength:
+    maxLineLength: 120
+  ReturnCount:
+    max: 3
+naming:
+  FunctionNaming:
+    active: true
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
