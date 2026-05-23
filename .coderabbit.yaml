@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 
 language: en-US
-tone_instructions: "Be concise. Prioritize correctness, security, and consistency with project review guides over style nits. Push back on weak reasoning."
+tone_instructions: "Concise. Prioritize correctness, security, and spec/ADR/rules consistency over style nits; push back on weak reasoning."
 
 reviews:
   profile: assertive
@@ -10,15 +10,32 @@ reviews:
   collapse_walkthrough: true
   review_status: true
 
+  # Exclusion-only ("review everything except these"). We deliberately avoid
+  # positive include patterns: CodeRabbit only documents that a positive pattern
+  # overrides a *default* exclusion — re-including a path that an earlier "!"
+  # rule excluded is undocumented, and if it ever behaved as an allowlist it
+  # would silently drop ALL code from review. Subtraction-only is unambiguous.
   path_filters:
-    - "!docs/**"
-    - "docs/ADR/**"
-    - "docs/plans/**"
-    - "!**/__generated__/**"
-    - "!**/.next/**"
-    - "!dist/**"
-    - "!build/**"
-    - "!coverage/**"
+    # Committed build output — contract-first regenerates these; never hand-reviewed
+    # (ADR-0005; .claude/rules/contract-first.md §1: codegen/** is build output).
+    - "!packages/contracts/codegen/**"
+    # Docs prose tree: ADR + plans stay reviewed (decision artifacts — see
+    # CODE_REVIEW_GUIDE.md "Doc/ADR/plan PRs"); the rest have their own SOT process.
+    - "!docs/spec/**"
+    - "!docs/roadmap/**"
+    - "!docs/architecture/**"
+    - "!docs/AI-WORKFLOW/**"
+    - "!docs/apply/**"
+    - "!docs/plans/archive/**"
+    - "!docs/DOMAIN-NOTES.md"
+    - "!docs/KNOWN-UNKNOWNS.md"
+    - "!docs/SOT-LAYERS.md"
+    # Transient / vendored (nested-safe globs; mostly gitignored already)
+    - "!**/build/**"
+    - "!**/dist/**"
+    - "!**/coverage/**"
+    - "!**/node_modules/**"
+    - "!**/.venv/**"
     - "!**/*.lock"
 
   auto_review:
@@ -29,12 +46,12 @@ reviews:
     base_branches: ["main"]
 
   tools:
-    gitleaks:     { enabled: true }
-    actionlint:   { enabled: true }
-    yamllint:     { enabled: true }
-    eslint:       { enabled: false }
-    biome:        { enabled: false }
-    markdownlint: { enabled: false }
+    gitleaks: {enabled: true}
+    actionlint: {enabled: true}
+    yamllint: {enabled: true}
+    eslint: {enabled: false}
+    biome: {enabled: false}
+    markdownlint: {enabled: false}
 
 knowledge_base:
   code_guidelines:
@@ -42,6 +59,9 @@ knowledge_base:
     filePatterns:
       - "CODE_REVIEW_GUIDE.md"
       - "**/CODE_REVIEW_GUIDE.md"
+      # Architecture do/don't SoT (FC/IS, contract-first, phase rules) — not covered
+      # by CodeRabbit's built-in defaults (which scan CLAUDE.md/AGENTS.md/.cursor, not .claude/rules).
+      - ".claude/rules/*.md"
   learnings:
     scope: local
   pull_requests:
