@@ -20,9 +20,12 @@ jobs:
         app: [api-python]
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v8
+        with:
+          version: "0.11.7"
+          enable-cache: true
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install uv
       - name: Install app + dev deps
         working-directory: apps/${{ matrix.app }}
         run: uv pip install --system -e ".[dev]"
@@ -56,9 +59,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v8
+        with:
+          version: "0.11.7"
+          enable-cache: true
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install uv
       # The script is PEP-723 self-contained (declares its own pyyaml dep), so `uv run`
       # needs no project context.
       - run: uv run scripts/check-use-case-coverage.py
