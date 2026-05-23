@@ -34,19 +34,19 @@ The current operational status of a *Line*. Closed enum: `RUNNING | IDLE | DOWN 
 - *See also:* `Machine` under `topology`. Per-machine status, if introduced, would be a separate concept.
 
 ### OEE — Overall Equipment Effectiveness
-*Status:* accepted. *Source:* ISO 22400-2:2014 §5; modeled in `monitoring/domain/oee.py`.
+*Status:* accepted. *Source:* ISO 22400-2:2014 §6 (Description of KPIs); modeled in `monitoring/domain/oee.py`.
 
-`OEE = Availability × Performance × Quality`. All three components ∈ [0, 1]; OEE inherits that range.
+`OEE = Availability × Performance × Quality`. ISO 22400-2's own normative names are *Effectiveness* (our "Performance") and *Quality ratio* (our "Quality"); we keep the widely-used Nakajima/TPM names in code and treat the ISO terms as aliases. `Availability` and `Quality` are bounded in [0, 1] by construction; `Performance` can exceed 1 when the ideal cycle time is set loose, so OEE is only *nominally* [0, 1] (see `KNOWN-UNKNOWNS.md`).
 
-- *Synonyms / external aliases:* "효율" (operator screens). PTC ThingWorx calls this "Asset OEE" — same thing.
-- *Do not confuse with:* TEEP (`Utilization × OEE`). TEEP is a separate KPI; see Phase 5 live-demo Scenario A.
+- *Synonyms / external aliases:* "효율" (operator screens); ISO 22400-2 *Effectiveness* / *Quality ratio* for the P and Q factors. (No verified vendor alias — do not assert one without a source.)
+- *Do not confuse with:* TEEP (`Utilization × OEE`). TEEP is a separate KPI — a TPM/Vorne construct, **not** an ISO 22400-2 KPI; see Phase 5 live-demo Scenario A.
 
 ### Availability / Performance / Quality (A / P / Q)
-*Status:* accepted. *Source:* ISO 22400-2 §5.
+*Status:* accepted. *Source:* ISO 22400-2:2014 §6.
 
-- `Availability = APT / PBT` (Actual Production Time / Planned Busy Time).
-- `Performance = (Ideal Cycle Time × Produced Quantity) / APT`.
-- `Quality = Good Quantity / Produced Quantity`.
+- `Availability = APT / PBT` (Actual Production Time / Planned Busy Time) — ISO 22400-2 defined terms.
+- `Performance = (Ideal Cycle Time × Produced Quantity) / APT`. ISO 22400-2 names this factor *Effectiveness* and calls "Ideal Cycle Time" the *planned run time per item (PRI)*; the formula is identical.
+- `Quality = Good Quantity / Produced Quantity` (ISO 22400-2: *Quality ratio*; `Good Quantity` excludes reworked parts).
 
 Phase 1 simplification: A is approximated as 1.0 (CAGG bucket treated as PBT). See ADR-0012 and `KNOWN-UNKNOWNS.md`.
 
@@ -116,12 +116,14 @@ Sparkplug B *node-level* message types — published on connect, on (Last-Will) 
 ### Rebirth
 *Status:* accepted. *Source:* Sparkplug v3.0 §5.
 
-Re-issuing a BIRTH after sequence-number gap detection. Triggered by NCMD from the Host or detected internally by the Edge.
+Re-issuing a BIRTH after sequence-number gap detection. The spec's normative trigger is an NCMD from the Host carrying the `Node Control/Rebirth` metric set to `true`; an Edge MAY additionally re-birth on internally detected inconsistency (implementation-defined, not required by the spec).
 
 ### Sequence number (seq)
 *Status:* accepted. *Source:* Sparkplug v3.0 §5.
 
-Monotonically increasing 8-bit counter on every Sparkplug message (0..255, wraps). Gap implies message loss → request *Rebirth*.
+Monotonically increasing 8-bit counter on every Sparkplug message (0..255, wraps). Reset to 0 by each NBIRTH, then incremented per message. Gap implies message loss → request *Rebirth*.
+
+- *Do not confuse with* `bdSeq` (birth/death sequence) — a separate 0..255 counter carried in NBIRTH/NDEATH that increments per MQTT session (not per message), used to correlate a stale Last-Will NDEATH with its originating session.
 
 ---
 
@@ -155,7 +157,7 @@ These are common in the industry but ambiguous, vendor-locked, or load-bearing f
 
 | Term | Why we avoid it | Use instead |
 |---|---|---|
-| "Equipment" | ISA-95 uses it for any of L0–L2; too vague at our level. | *Machine*, *Line*, *Factory* — pick the precise level. |
+| "Equipment" | ISA-95's umbrella term for any node of the role-based equipment hierarchy (Enterprise → … → Control Module) — orthogonal to the functional levels L0–L4, so too broad to pin a precise level. | *Machine*, *Line*, *Factory* — pick the precise level. |
 | "Telemetry stream" | Collides with OTel/monitoring "telemetry". | *Sparkplug data* (when about the edge), *machine telemetry* (when about a DB row). |
 | "Real-time" | Implausibly precise; we are seconds-latency at best. | "live" (sub-second observable), or quote the actual SLA. |
 | "Smart factory" | Vendor marketing. | "manufacturing platform", "DX platform", or the concrete capability. |
