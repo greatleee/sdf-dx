@@ -32,7 +32,11 @@ def _domain_files() -> list[Path]:
 
 
 def _base_name(node: ast.expr) -> str | None:
-    return node.id if isinstance(node, ast.Name) else None
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        return node.value.id  # e.g., datetime.datetime -> 'datetime'
+    return None
 
 
 def _violations(tree: ast.AST) -> list[str]:

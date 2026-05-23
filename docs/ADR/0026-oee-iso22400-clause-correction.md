@@ -1,4 +1,4 @@
-# ADR-0026: OEE per ISO 22400-2:2014 §6 — clause-citation correction (supersedes ADR-0012)
+# ADR-0026: OEE per ISO 22400-2:2014 §6 — clause-citation and Performance-range corrections (supersedes ADR-0012)
 
 - **Status:** accepted
 - **Date:** 2026-05-24
@@ -21,14 +21,14 @@ Per the project's supersede-only doc policy (an ADR is not edited in place beyon
 
 ## Decision
 
-OEE follows **ISO 22400-2:2014 §6 ("Description of KPIs")** — the corrected clause. Every substantive decision of ADR-0012 is carried forward verbatim:
+OEE follows **ISO 22400-2:2014 §6 ("Description of KPIs")** — the corrected clause. Every substantive decision of ADR-0012 is carried forward, with one correction to its range claim (called out in D-1 below):
 
 - **D-1.** `OEE = Availability × Performance × Quality`, with components defined exactly as in §6 and the GLOSSARY: `Availability = APT / PBT`; `Performance` (ISO *Effectiveness*) `= (Ideal Cycle Time × Produced Quantity) / APT`; `Quality = Good Quantity / Produced Quantity`. Availability and Quality ∈ [0, 1] by construction; Performance can exceed 1 when the ideal cycle time is loose, so OEE is only *nominally* [0, 1] (`KNOWN-UNKNOWNS.md`).
 - **D-2.** Phase-1 simplification — the 5-minute continuous-aggregate bucket is treated as Planned Busy Time, with Actual Production Time approximated as the full bucket, so **Availability ≈ 1.0**. Logged in `KNOWN-UNKNOWNS.md`; retired in Phase 3.
 - **D-3.** Only the 5-minute CAGG (`line_oee_5m`) exists in Phase 1; the 1-hour and shift-length windows are Phase 3.
 - **D-4.** OEE is a pure domain function returning failures as values (ADR-0016): zero Produced Quantity / zero APT / zero PBT return a named `OeeUndefined` case rather than raising; corrupt inputs that violate by-construction preconditions (negative counts/times, good > produced, APT > PBT, non-finite floats) raise.
 
-The **only change from ADR-0012 is the clause citation (§5 → §6)** plus the verification source recorded below. No formula, threshold, or runtime behavior changes. The implementation (`apps/api-python/src/sdf_api/contexts/monitoring/domain/oee.py`), the GLOSSARY, and `DOMAIN-NOTES` already cite §6 and need no change.
+The **changes from ADR-0012 are two**: (1) the clause citation (§5 → §6), and (2) a correction to its range claim — ADR-0012 D-1 asserted all three components and OEE lie in `[0, 1]`, whereas *Performance* (ISO *Effectiveness*) can exceed 1 when the ideal cycle time is loose, so OEE is only *nominally* `[0, 1]` (`KNOWN-UNKNOWNS.md`). No formula, threshold, or runtime behavior changes — only the citation and the range note; the verification source is recorded below. The implementation (`apps/api-python/src/sdf_api/contexts/monitoring/domain/oee.py`), the GLOSSARY, and `DOMAIN-NOTES` already cite §6 and need no change.
 
 ## Consequences
 
