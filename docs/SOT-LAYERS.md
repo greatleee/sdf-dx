@@ -88,6 +88,7 @@ If you find yourself wanting to update an old doc to reflect a new choice, that 
    - Confirm the phase's AC exists in design spec §13.N. If anything is missing or unclear, edit AC *first* (this is the only durable doc you edit at this step).
    - Write the phase's implementation plan under `docs/plans/YYYY-MM-DD-phase-N-<slug>.md`. This is scaffold and treated as such.
    - If the phase depends on yet-undecided choices, write those ADRs *before* coding (load-bearing decisions deserve to be settled cold, not under deadline pressure).
+   - The phase's first commits are the **Chapter 0 batch** (static spec + load-bearing ADRs + initial `DOMAIN-NOTES.md` / `KNOWN-UNKNOWNS.md`) — must land before any implementation commit. See [ADR-0000](ADR/0000-phase-iteration-chapter-0.md) for the structural rule and the rationale (commit-log shape, LLM drift prevention, AI-WORKFLOW authenticity).
 
 2. **During the phase**
    - Treat AC as the SoT for "what's left." Don't add features that aren't in AC; if you discover one is needed, edit AC explicitly.
