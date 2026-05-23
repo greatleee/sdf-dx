@@ -1,0 +1,70 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Top-level CI for application code. The contract SoT + codegen drift gate lives in
+# its own `contracts.yml` (path-filtered to packages/contracts/). Jobs here cover only
+# code that exists today; the plan's `frontend` (Section F) and `e2e-real` (Sections
+# F/G + the deferred Python ingest/API) jobs join when those land.
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # ingest-python joins this matrix once Task 18 lands real code + tests;
+        # api-python (Section D functional core) is the only Python app with source today.
+        app: [api-python]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "0.11.7"
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install app + dev deps
+        working-directory: apps/${{ matrix.app }}
+        run: uv pip install --system -e ".[dev]"
+      - name: ruff (lint + format)
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: import-linter (architecture contracts — ADR-0023)
+        working-directory: apps/${{ matrix.app }}
+        run: lint-imports
+      - name: mypy (strict)
+        working-directory: apps/${{ matrix.app }}
+        run: mypy
+      - name: pytest
+        working-directory: apps/${{ matrix.app }}
+        run: pytest -q
+
+  kotlin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: ktlint + detekt + test (all modules)
+        working-directory: apps/ot-gateway-kotlin
+        run: ./gradlew ktlintCheck detekt test
+
+  use-case-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "0.11.7"
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      # The script is PEP-723 self-contained (declares its own pyyaml dep), so `uv run`
+      # needs no project context.
+      - run: uv run scripts/check-use-case-coverage.py

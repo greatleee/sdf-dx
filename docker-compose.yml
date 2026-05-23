@@ -53,7 +53,7 @@ services:
 
   simulator:
     build: ./apps/ot-gateway-kotlin
-    command: ["./gradlew", ":simulator:run"]
+    command: ["/app/simulator/bin/simulator"]
     environment:
       MQTT_URL: tcp://hivemq:1883
       SDF_GROUP_ID: sdf_default
@@ -63,7 +63,7 @@ services:
 
   bridge:
     build: ./apps/ot-gateway-kotlin
-    command: ["./gradlew", ":bridge:bootRun"]
+    command: ["java", "-jar", "/app/bridge.jar"]
     environment:
       MQTT_URL: tcp://hivemq:1883
       KAFKA_BOOTSTRAP: redpanda:9092
