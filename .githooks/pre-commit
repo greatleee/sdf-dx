@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Local mirror of the contracts CI gate (.github/workflows/contracts.yml).
+#
+# When a Sparkplug / OpenAPI / Kafka SoT *schema* is staged, this lints the spec,
+# regenerates all codegen, and stages the result — so generated code lands in the
+# SAME commit as the schema (contract-first rule §4) and drift can never reach CI.
+#
+# Scoped to schema changes only: normal commits are a no-op (ADR-0010 "pre-commit
+# = fast"). Requires the contracts toolchain on PATH (protoc, uv, pnpm, node).
+#
+# Activate once per clone:  git config core.hooksPath .githooks
+set -euo pipefail
+
+# Match SoT schema sources only — never README or the codegen/ output.
+schema_re='^packages/contracts/(sparkplug/.*\.proto|openapi/.*\.ya?ml|kafka-payloads/.*\.json)$'
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+if ! printf '%s\n' "$staged" | grep -qE "$schema_re"; then
+  exit 0  # no contract schema touched
+fi
+
+echo "[contracts] schema change staged -> lint + regenerate + stage codegen"
+make -C packages/contracts lint   # quality gate (spectral); errors abort the commit
+make -C packages/contracts all    # regenerate from the finished schema, once
+git add packages/contracts/codegen
+echo "[contracts] codegen regenerated and staged (in this commit)."

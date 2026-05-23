@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdf-dx.local/kafka/machine_telemetry.json",
+  "title": "MachineTelemetry",
+  "type": "object",
+  "required": ["tenantId", "lineId", "machineId", "metric", "value", "observedAt", "sparkplugSeq"],
+  "properties": {
+    "tenantId": { "type": "string" },
+    "lineId":   { "type": "string", "format": "uuid" },
+    "machineId":{ "type": "string", "format": "uuid" },
+    "metric":   { "type": "string", "enum": ["cycle_count", "good_count", "scrap_count", "state", "cycle_time_ms"] },
+    "value":    { "type": ["number", "string"] },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "sparkplugSeq": { "type": "integer", "minimum": 0, "maximum": 255 }
+  },
+  "additionalProperties": false
+}
