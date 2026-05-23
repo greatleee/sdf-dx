@@ -38,7 +38,7 @@ def _violations(tree: ast.AST) -> list[str]:
             continue
         attr = node.func.attr
         base = _base_name(node.func.value)
-        if attr == "utcnow":
+        if attr == "utcnow" and base == "datetime":
             found.append(f"datetime.utcnow() @ line {node.lineno}")
         elif attr == "now" and base == "datetime":
             found.append(f"datetime.now() @ line {node.lineno}")

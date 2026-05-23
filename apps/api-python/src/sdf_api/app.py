@@ -88,18 +88,20 @@ async def _kafka_reachable(bootstrap: str) -> bool:
     The API is read-only over the DB; the Kafka probe exists for ops parity with
     the pipeline, so a cheap socket connect is sufficient.
     """
-    host, _, port = bootstrap.partition(":")
-    try:
-        _, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, int(port or "9092")),
-            _PROBE_TIMEOUT_S,
-        )
-    except (OSError, asyncio.TimeoutError, ValueError):
-        return False
-    writer.close()
-    with contextlib.suppress(OSError):
-        await writer.wait_closed()
-    return True
+    for broker in (b.strip() for b in bootstrap.split(",") if b.strip()):
+        host, _, port = broker.partition(":")
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, int(port or "9092")),
+                _PROBE_TIMEOUT_S,
+            )
+        except (OSError, asyncio.TimeoutError, ValueError):
+            continue
+        writer.close()
+        with contextlib.suppress(OSError):
+            await writer.wait_closed()
+        return True
+    return False
 
 
 async def _poll_line_state(

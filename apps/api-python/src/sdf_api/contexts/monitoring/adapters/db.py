@@ -77,6 +77,10 @@ class PgLineStateReader:
             )
         if row is None:
             return None
+        return self._to_domain(row, line_id)
+
+    @staticmethod
+    def _to_domain(row: asyncpg.Record, line_id: LineId) -> LineStateSnapshot:
         return LineStateSnapshot(
             line_id=line_id,
             state=LineState(row["state"]),
@@ -113,9 +117,18 @@ class PgOeeReader:
         )
         if not isinstance(outcome, OeeReading):
             return None  # OeeUndefined (e.g. idle window) — nothing to report.
+        return self._to_domain(row, line_id, window, outcome)
+
+    @staticmethod
+    def _to_domain(
+        row: asyncpg.Record,
+        line_id: LineId,
+        window: OeeWindow,
+        reading: OeeReading,
+    ) -> LineOeeSnapshot:
         return LineOeeSnapshot(
             line_id=line_id,
             window=window,
-            reading=outcome,
+            reading=reading,
             observed_at=Timestamp(row["observed_at"]),
         )

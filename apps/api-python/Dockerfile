@@ -6,7 +6,7 @@
 # (contract-first §2). Stage 2 carries only site-packages — no build toolchain.
 
 FROM python:3.12-slim AS build
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir uv==0.11.7
 WORKDIR /app
 COPY packages/contracts/codegen/python /app/packages/contracts/codegen/python
 COPY apps/api-python/pyproject.toml /app/apps/api-python/pyproject.toml

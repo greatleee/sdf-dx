@@ -14,6 +14,12 @@ docs
 **/node_modules
 **/build
 **/.gradle
+# Secret material must never enter the repo-root build context.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/.aws
 # Kotlin sources are not part of the Python images.
 apps/ot-gateway-kotlin
 # Tests are not copied into the runtime images.

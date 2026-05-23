@@ -5,7 +5,7 @@
 # against the generated DTO rather than a hand-written model (contract-first §2).
 
 FROM python:3.12-slim AS build
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir uv==0.11.7
 WORKDIR /app
 COPY packages/contracts/codegen/python /app/packages/contracts/codegen/python
 COPY apps/ingest-python/pyproject.toml /app/apps/ingest-python/pyproject.toml

@@ -119,6 +119,7 @@ class KafkaTelemetrySource:
                     offsets[topic_partition] = message.offset + 1
             if batch:
                 yield batch
+            if offsets:
                 await self._consumer.commit(offsets)
             else:
                 await asyncio.sleep(0)
