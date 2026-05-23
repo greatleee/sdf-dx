@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdf-dx.local/kafka/line_state.json",
+  "title": "LineStateEvent",
+  "type": "object",
+  "required": ["tenantId", "lineId", "state", "observedAt"],
+  "properties": {
+    "tenantId": { "type": "string" },
+    "lineId":   { "type": "string", "format": "uuid" },
+    "state":    { "type": "string", "enum": ["RUNNING", "IDLE", "DOWN", "CHANGEOVER"] },
+    "reason":   { "type": ["string", "null"] },
+    "observedAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
