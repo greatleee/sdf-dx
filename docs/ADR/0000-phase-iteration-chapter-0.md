@@ -21,6 +21,8 @@ The cost of the current ordering, in this project specifically:
 
 1. **Commit history shape is the primary portfolio surface.** Viewers (interviewers, recruiters, future maintainers) scroll `git log --oneline` and read the *order* of commits more than the body of any single doc. A phase whose log reads `feat(...) × 30 → docs(...) × 5` signals "built first, documented after." This contradicts the portfolio thesis ("AI-네이티브 senior가 낯선 도메인을 정직하게 탐독"). The thesis only survives if the log reads `docs(spec/ADR/...) × N → feat(...) × M → docs(...) × revisions`.
 
+   *This rationale is a calibrated bet* (see Notes §"Calibration"). **Falsification criterion**: if Phase 1 and Phase 2 retrospectives surface *no* interviewer comment on commit ordering or doc cadence, downgrade this rationale and re-evaluate whether the Chapter 0 batch's upfront cost is justified.
+
 2. **LLM drift across sessions.** Implementation sessions that start without a frozen Chapter 0 SoT must re-discover the spec from prior chat context each time. Drift accumulates between sessions. A Chapter 0 batch on disk gives every later session an unambiguous reference.
 
 3. **AI-WORKFLOW case authenticity.** A case study written after the incident is a reconstruction, not a record. SOT-LAYERS line 95 already calls this out, but the Phase 1 plan still defers them — because no rule binds "incident-time writing" to a visible commit boundary.
@@ -59,6 +61,21 @@ Their append-only conventions are enforced by the files themselves (`USE-CASES.m
 
 For Phase 1 specifically: `DOMAIN-NOTES.md` and `KNOWN-UNKNOWNS.md` do not yet exist; their initial contents land in Phase 1's Chapter 0.
 
+### What counts as a "load-bearing decision" for Chapter 0
+
+A decision is load-bearing — and therefore belongs in an ADR landed within Chapter 0 — if **any** of the following hold:
+
+1. Two reasonable implementation paths exist *and* they would produce different code structure across ≥2 downstream tasks.
+2. The decision constrains module boundaries, persistence shape, contract format, or cross-process protocol.
+3. Reversing the decision would cost >1 day of focused work.
+
+A decision is *not* load-bearing (so it can emerge mid-phase, per SOT-LAYERS §"Per-phase workflow" §2) if:
+
+- It affects ≤1 task and reversal is local.
+- It is a tactical choice *within* an already-decided architecture (e.g., a specific library choice within an already-decided protocol).
+
+When in doubt, treat it as load-bearing and ADR it at Chapter 0. The cost of a redundant Chapter 0 ADR is small; the cost of post-hoc rationalization is the portfolio thesis (rationale 1 above).
+
 ### Living documents (committed throughout the phase — NOT in Chapter 0)
 
 These continue to commit as their underlying events occur, per SOT-LAYERS §"Per-phase workflow" §2:
@@ -94,6 +111,7 @@ A Phase plan (`docs/plans/YYYY-MM-DD-phase-N-*.md`) is **non-compliant** if any 
 ## Notes
 
 - This ADR **tightens** `docs/SOT-LAYERS.md` §"Per-phase workflow" by naming the structural unit ("Chapter 0 commit batch") and forbidding the "documentation-at-end" anti-pattern. It does not contradict SOT-LAYERS; it gives the same policy an enforceable shape.
+- **Chapter 0 prerequisites**: a Phase's Chapter 0 can begin only when (a) the Phase's AC is frozen in design spec §13.N and (b) a draft phase plan exists under `docs/plans/`. ADR-0000 itself is *idempotent* across phases — not re-decided per phase. The first *technical* ADR of a Phase's Chapter 0 depends only on the frozen AC.
 - **Enforcement surface**: `.claude/rules/phase-iteration.md` — auto-loaded by Claude Code each session, mandates Chapter 0 ordering in any Phase plan work.
 - **ADR-0000 by deliberate choice.** This methodology decision sits before all technical ADRs in the series. The first commit of the ADR sequence (`docs(adr): ADR-0000 ...`) is itself the first item of Phase 1's Chapter 0 batch — self-consistent.
 - **Calibration that informed this ADR**: viewers of this portfolio (interviewers per the author's roleplay experience) read folder structure + commit history + code, not doc bodies. This shifts the "where does the signal live" weighting toward commit log shape and away from doc prose. The decision here is optimized accordingly.
