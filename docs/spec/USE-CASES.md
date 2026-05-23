@@ -18,6 +18,7 @@ Index of all use cases. **Authoritative content for each UC lives in `use-cases/
 | ID | Title | Status | Phase | Primary actor | BC | Spec file | E2E test |
 |---|---|---|---|---|---|---|---|
 | UC-001 | Operator monitors single line state | draft | 1 | A-OP | monitoring | [use-cases/UC-001-monitor-line-state.md](use-cases/UC-001-monitor-line-state.md) | apps/dashboard-react/tests/e2e/UC-001-monitor-line-state.spec.ts |
+| UC-002 | Operator observes OEE refresh | draft | 1 | A-OP | monitoring | [use-cases/UC-002-observe-oee.md](use-cases/UC-002-observe-oee.md) | apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts |
 
 ## How to add a new UC
 
