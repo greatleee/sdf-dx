@@ -1,0 +1,7 @@
+# Keep the build context small and force a clean in-container build: never copy host
+# build outputs or IDE/Gradle caches into the image.
+build/
+*/build/
+.gradle/
+.idea/
+*.iml
