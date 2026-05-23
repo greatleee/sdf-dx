@@ -4,4 +4,4 @@ node_modules/
 *.log
 
 .omc/
-.claude/worktress/*
+.claude/worktrees/*
