@@ -64,6 +64,13 @@ warn_unreachable = true
 mypy_path = "src"
 packages = ["sdf_api"]
 
+# asyncpg / aiokafka ship no py.typed marker; treat them as untyped third-party
+# boundaries (used in adapters / composition only). This suppresses the
+# missing-stub error without relaxing strictness on our own code.
+[[tool.mypy.overrides]]
+module = ["asyncpg.*", "aiokafka.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
@@ -115,3 +122,26 @@ modules = [
   "sdf_api.contexts.monitoring",
   "sdf_api.contexts.topology",
 ]
+
+# ADR-0023 #6 — adapters-no-upward (ADR-0019). Adapters satisfy Port Protocols
+# structurally; the composition root acknowledges the match. Driving HTTP/WS
+# routing therefore lives in composition (app.py), never in adapters/.
+# (`sdf_api.use_cases` is omitted from both contracts until the first cross-BC
+# use case lands — import-linter errors on a source/forbidden module that does
+# not yet exist.)
+[[tool.importlinter.contracts]]
+name = "adapters-no-upward"
+type = "forbidden"
+source_modules = ["sdf_api.contexts.*.adapters"]
+forbidden_modules = [
+  "sdf_api.contexts.*.ports",
+  "sdf_api.contexts.*.application",
+]
+
+# ADR-0023 #7 — composition-only-imports-adapters. Application/use-cases never
+# import adapters; only the composition root wires them.
+[[tool.importlinter.contracts]]
+name = "composition-only-imports-adapters"
+type = "forbidden"
+source_modules = ["sdf_api.contexts.*.application"]
+forbidden_modules = ["sdf_api.contexts.*.adapters"]
