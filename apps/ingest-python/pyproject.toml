@@ -49,6 +49,13 @@ warn_unreachable = true
 mypy_path = "src"
 packages = ["sdf_ingest"]
 
+# asyncpg / aiokafka ship no py.typed marker; treat them as untyped third-party
+# boundaries. This does NOT relax strictness on our own code — only suppresses
+# the missing-stub error for these infra clients (used in adapters only).
+[[tool.mypy.overrides]]
+module = ["asyncpg.*", "aiokafka.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
@@ -57,9 +64,28 @@ markers = ["integration: opt-in via --integration"]
 
 [tool.importlinter]
 root_package = "sdf_ingest"
+# Required because the forbidden contracts below name external packages
+# (pydantic, aiokafka, …) — import-linter must graph them to ban their import.
+include_external_packages = true
 
+# The ingest functional core (`sdf_ingest.domain`) is held to the same purity as
+# the api domain (ADR-0023 contracts 1–3): no infrastructure, no validation libs
+# (incl. the generated pydantic DTOs in `sdf_contracts`), no randomness sources.
+# Call-site clock/uuid reads are additionally caught by tests/architecture.
 [[tool.importlinter.contracts]]
-name = "ingest.domain must not import infra"
+name = "ingest-domain-no-infrastructure"
 type = "forbidden"
 source_modules = ["sdf_ingest.domain"]
-forbidden_modules = ["aiokafka", "asyncpg", "sdf_ingest.adapters"]
+forbidden_modules = ["aiokafka", "asyncpg", "httpx", "sdf_ingest.adapters"]
+
+[[tool.importlinter.contracts]]
+name = "ingest-domain-no-validation-libs"
+type = "forbidden"
+source_modules = ["sdf_ingest.domain"]
+forbidden_modules = ["pydantic", "marshmallow", "attrs", "returns", "arrow", "sdf_contracts"]
+
+[[tool.importlinter.contracts]]
+name = "ingest-domain-no-system-reads"
+type = "forbidden"
+source_modules = ["sdf_ingest.domain"]
+forbidden_modules = ["random", "secrets"]
