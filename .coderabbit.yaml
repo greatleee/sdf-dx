@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: en-US
+tone_instructions: "Be concise. Prioritize correctness, security, and consistency with project review guides over style nits. Push back on weak reasoning."
+
+reviews:
+  profile: assertive
+  poem: false
+  high_level_summary: true
+  collapse_walkthrough: true
+  review_status: true
+
+  path_filters:
+    - "!docs/**"
+    - "docs/ADR/**"
+    - "docs/plans/**"
+    - "!**/__generated__/**"
+    - "!**/.next/**"
+    - "!dist/**"
+    - "!build/**"
+    - "!coverage/**"
+    - "!**/*.lock"
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    ignore_title_keywords: ["WIP", "DRAFT", "DO NOT MERGE"]
+    base_branches: ["main"]
+
+  tools:
+    gitleaks:     { enabled: true }
+    actionlint:   { enabled: true }
+    yamllint:     { enabled: true }
+    eslint:       { enabled: false }
+    biome:        { enabled: false }
+    markdownlint: { enabled: false }
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CODE_REVIEW_GUIDE.md"
+      - "**/CODE_REVIEW_GUIDE.md"
+  learnings:
+    scope: local
+  pull_requests:
+    scope: local
+  issues:
+    scope: local
