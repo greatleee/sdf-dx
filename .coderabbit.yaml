@@ -61,7 +61,8 @@ knowledge_base:
       - "**/CODE_REVIEW_GUIDE.md"
       # Architecture do/don't SoT (FC/IS, contract-first, phase rules) — not covered
       # by CodeRabbit's built-in defaults (which scan CLAUDE.md/AGENTS.md/.cursor, not .claude/rules).
-      - ".claude/rules/*.md"
+      # `**/` prefix matches CodeRabbit's own default-pattern convention + any nested .claude/rules.
+      - "**/.claude/rules/*.md"
   learnings:
     scope: local
   pull_requests:
