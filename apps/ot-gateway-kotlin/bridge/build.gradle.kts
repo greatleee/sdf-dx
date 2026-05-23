@@ -12,6 +12,7 @@ dependencies {
     implementation("org.eclipse.tahu:tahu-core:1.0.10")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 
+    testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("com.lemonappdev:konsist:0.17.3")
     testImplementation("org.testcontainers:kafka:1.20.2")
@@ -20,3 +21,8 @@ dependencies {
 }
 
 tasks.test { useJUnitPlatform() }
+
+// The Spring Boot fat jar is the only runtime artifact; give it a stable, version-free
+// name the Dockerfile can copy, and skip the plain library jar (nothing depends on it).
+tasks.bootJar { archiveFileName.set("bridge.jar") }
+tasks.jar { enabled = false }
