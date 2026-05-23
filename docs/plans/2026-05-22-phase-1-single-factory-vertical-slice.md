@@ -1,6 +1,6 @@
 # Phase 1 — Single-Factory Vertical Slice Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. **Before each task, load `docs/architecture/2026-05-23-code-architecture.md` — when a code sample below conflicts with that arch doc, the arch doc wins.**
 
 **Goal:** Build an end-to-end vertical slice — Kotlin OT gateway publishing Sparkplug B telemetry over MQTT → Kafka → Python ingest → TimescaleDB → Python domain (OEE per ISO 22400) → FastAPI REST+WS → React dashboard — running locally via `docker compose up` in under 5 minutes.
 
@@ -9,6 +9,8 @@
 **Tech Stack:** Kotlin 2.0 + Spring Boot 3 + Eclipse Tahu + Paho · Python 3.12 + FastAPI + aiokafka + asyncpg + Pydantic v2 · React 18 + Vite + TypeScript 5 + TanStack Query + Tailwind + Recharts + react-i18next · PostgreSQL 16 + TimescaleDB 2.15 · HiveMQ CE 2024 · Redpanda 24 (Kafka-compatible) · Playwright 1.4x · MSW 2 · Docker Compose v2.
 
 **Source Spec:** `docs/roadmap/2026-05-22-sdf-manufacturing-dx-portfolio-design.md` §10 Phase 1, §13.1 Phase 1 AC.
+
+**Code Architecture (load this — it supersedes plan code samples on conflict):** `docs/architecture/2026-05-23-code-architecture.md` (Engineering Conventions). Plus ADR-0004 / 0009 / 0016 / 0017 / 0018. Known conflicts to apply during execution: (a) core error handling — plan uses `raise X`, arch doc requires sum-type return; (b) clock / UUID — arch doc forbids `datetime.now()` / `uuid.uuid4()` inside `domain/`, inject from shell; (c) Pydantic — arch doc keeps it at boundary only, domain uses stdlib `@dataclass(frozen=True, slots=True)`; (d) cross-BC use cases — live in top-level `src/sdf_api/use_cases/`, not inside any BC's `application/`. **This plan's body is not edited to reflect these — that violates SOT-LAYERS §74. Apply at execution time.**
 
 **Out of Scope for Phase 1:** Multi-tenancy (Phase 2), observability/k8s (Phase 3), additional BCs (Phase 4), demo polish (Phase 5).
 
