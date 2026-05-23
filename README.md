@@ -16,3 +16,19 @@ docker compose up
 - Known limits: `docs/KNOWN-UNKNOWNS.md`
 - Domain absorption notes: `docs/DOMAIN-NOTES.md`
 - AI workflow case studies: `docs/AI-WORKFLOW/`
+
+## Development
+
+### Git hooks — keep codegen in sync with schemas
+Generated code under `packages/contracts/codegen/` is kept in lockstep with its
+source schemas by a pre-commit hook (the local mirror of the `contracts` CI
+gate). Enable it once per clone:
+```bash
+git config core.hooksPath .githooks
+```
+When a `packages/contracts/` schema (`*.proto`, OpenAPI `*.yaml`, Kafka
+`*.schema.json`) is staged, the hook lints the spec, regenerates all codegen, and
+stages the result — so codegen lands in the same commit as the schema and drift
+never reaches CI. Requires `protoc`, `uv`, `pnpm`, `node` on PATH. Commits that
+don't touch a schema are unaffected.
+
