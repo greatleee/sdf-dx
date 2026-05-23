@@ -26,6 +26,7 @@ Code is the only thing that changes constantly, and it stays the SoT for *curren
 |---|---|---|---|
 | **Strategy** (why / where) | Almost never | ✅ durable | `docs/roadmap/2026-05-22-sdf-manufacturing-dx-portfolio-design.md` §1, §10. Frozen snapshot at project start. |
 | **Decisions (ADR)** | Once per decision, then frozen | ✅ snapshot at decision time | `docs/ADR/0001..NNNN`. Superseded ADRs are *added*, not edited. |
+| **Engineering Conventions** | Convention evolution only — else frozen | ✅ durable (living guide) | `docs/architecture/...`. Code-level patterns (FC/IS adoption, DDD tactical mapping, error/clock/cross-BC rules). |
 | **Functional surface** | Only when user-visible behavior changes | ✅ durable | `docs/spec/` (ACTORS, GLOSSARY, USE-CASES, per-UC files), `docs/DOMAIN-NOTES.md`, `docs/KNOWN-UNKNOWNS.md`, `README.md`, `docs/walkthrough-script.md` |
 | **Acceptance Criteria (AC)** | Only when the definition of "done" for a phase changes | ✅ durable | design spec §13.1–13.5 (Phase 1..5 AC). Acts as the project's roadmap-spec. |
 | **AI workflow cases** | Once per incident, then frozen | ✅ snapshot | `docs/AI-WORKFLOW/case-NN.md` |
@@ -36,6 +37,7 @@ Code is the only thing that changes constantly, and it stays the SoT for *curren
 
 - *Strategy* — the answer to "what is this portfolio trying to prove?" If strategy changes, write a new spec, don't edit in place.
 - *Decisions* — the answer to "why did we choose X over Y?" An ADR is authoritative about *the moment its decision was made*. If you reverse it, write a new ADR that supersedes the old one; don't edit history.
+- *Engineering Conventions* — the answer to "what code-level patterns must all code in this repo follow?" A living guide for architecture rules (FC/IS, error handling, injection, cross-BC). Sits between ADRs (which record *why* a pattern was chosen, point-in-time) and code (which is the implementation). Edited only when a convention actually evolves.
 - *Functional surface* — the answer to "what does the system do, from the outside?" This is the classic functional-spec role. Updated only when actual external behavior changes.
 - *Acceptance Criteria* — the answer to "what must be true to call this phase done?" Functions as the checklist you diff against the repo + docs to see what's left. AC items can be runtime behaviors *or* engineering artifacts (e.g., "ADR 1, 2, 3, 4 written").
 - *AI workflow cases* — the answer to "what did the LLM get right/wrong, and how did the guardrails fire?" Written immediately after the incident — cannot be reconstructed later.
@@ -56,6 +58,7 @@ The author's prior habit (general web development) was: keep functional spec as 
 | Functional spec — explicit *negative* space | `KNOWN-UNKNOWNS.md` | `docs/KNOWN-UNKNOWNS.md` |
 | Implementation plan (throwaway) | Phase plan | `docs/plans/...` |
 | Decision rationale | ADRs | `docs/ADR/` |
+| (Tacit team knowledge / wiki) | Engineering Conventions (explicit doc) | `docs/architecture/` |
 | Strategy / context | Design spec (other than §13) | `docs/roadmap/...` |
 
 In short: in this project's vocabulary, **"functional spec as durable SoT" expands to "(Strategy + ADRs + Functional surface + AC) as durable SoT"**. AC plays the roadmap role; USE-CASES plays the user-behavior subset role.
@@ -67,6 +70,7 @@ In short: in this project's vocabulary, **"functional spec as durable SoT" expan
 ### What stays SoT — never edit destructively
 - **Strategy doc**: frozen at project start. If strategy shifts mid-flight, write a new spec under `docs/roadmap/` and let it supersede the old one. Do not edit in place.
 - **ADRs**: never edit accepted ADRs. New decision → new ADR that lists the old as superseded.
+- **Engineering Conventions**: edit only when a convention actually evolves (e.g., adopting a new pattern, deprecating one). Each substantive change should reference (or trigger) an ADR that records *why*. The convention doc says *how*; the ADR says *why we chose this how*. Code following an existing convention is not a reason to edit the doc.
 - **AI-WORKFLOW cases**: never edit after the incident; correct typos only.
 - **AC**: edit only when the definition of "done" for that phase changes (rare). Treat each AC checkbox as a contract.
 
@@ -110,6 +114,7 @@ When unsure where to put a piece of information, ask:
 
 - "Will this still be true a year from now?" → durable layer. Identify which.
 - "Does this describe *a decision* I made?" → ADR.
+- "Does this describe *how all code in this repo should be written*?" → Engineering Conventions (`docs/architecture/`).
 - "Does this describe *what the user sees*?" → USE-CASES or DOMAIN-NOTES.
 - "Does this describe *what I explicitly chose not to do*?" → KNOWN-UNKNOWNS.
 - "Does this describe *how to build something*?" → Phase plan (scaffold).
