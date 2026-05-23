@@ -1,0 +1,103 @@
+name: sdf-dx
+
+services:
+  timescale:
+    image: timescale/timescaledb:2.15.3-pg16
+    environment:
+      POSTGRES_PASSWORD: sdf
+      POSTGRES_USER: sdf
+      POSTGRES_DB: sdf
+    ports: ["5432:5432"]
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ./infra/timescale/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdf -d sdf"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  hivemq:
+    image: hivemq/hivemq-ce:2024.5
+    ports: ["1883:1883", "8080:8080"]
+    # hivemq-ce ships no `nc`; use bash's /dev/tcp (bash IS present) for a
+    # dependency-free TCP liveness probe on the MQTT listener.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/1883"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      # Two listeners: `internal` for in-network services (ingest/api/bridge
+      # connect to redpanda:9092), `external` advertised as localhost:19092 for
+      # host-side tools/local dev. A single listener advertising redpanda:9092
+      # is unreachable from the host (hostname doesn't resolve there).
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092", "9644:9644"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  simulator:
+    build: ./apps/ot-gateway-kotlin
+    command: ["./gradlew", ":simulator:run"]
+    environment:
+      MQTT_URL: tcp://hivemq:1883
+      SDF_GROUP_ID: sdf_default
+      SDF_LINE_ID: line-a
+    depends_on:
+      hivemq: { condition: service_healthy }
+
+  bridge:
+    build: ./apps/ot-gateway-kotlin
+    command: ["./gradlew", ":bridge:bootRun"]
+    environment:
+      MQTT_URL: tcp://hivemq:1883
+      KAFKA_BOOTSTRAP: redpanda:9092
+      SDF_GROUP_ID: sdf_default
+      SDF_DEFAULT_TENANT: sdf_default
+    depends_on:
+      hivemq: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+
+  ingest:
+    build: ./apps/ingest-python
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      PG_DSN: postgresql://sdf:sdf@timescale:5432/sdf
+    depends_on:
+      timescale: { condition: service_healthy }
+      redpanda:  { condition: service_healthy }
+
+  api:
+    build: ./apps/api-python
+    ports: ["8000:8000"]
+    environment:
+      PG_DSN: postgresql://sdf:sdf@timescale:5432/sdf
+      KAFKA_BOOTSTRAP: redpanda:9092
+      SDF_MODE: real
+    depends_on:
+      timescale: { condition: service_healthy }
+      redpanda:  { condition: service_healthy }
+
+  dashboard:
+    build: ./apps/dashboard-react
+    ports: ["5173:80"]
+    depends_on:
+      api: { condition: service_started }
+
+volumes:
+  timescale-data:
