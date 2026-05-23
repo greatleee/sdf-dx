@@ -4,9 +4,8 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, conint
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, conint
 
 
 class Metric(StrEnum):
@@ -21,9 +20,18 @@ class MachineTelemetry(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    tenantId: str
-    lineId: UUID
-    machineId: UUID
+    tenantId: str = Field(
+        ...,
+        description="Sparkplug group_id; Phase 1 single tenant 'sdf_default' (ADR-0011 D-2).",
+    )
+    lineId: str = Field(
+        ...,
+        description='Edge-native line identifier = Sparkplug edge_node_id = line slug (ADR-0011 D-2: edge_node_id == line_id). NOT a topology UUID; the ingest service resolves slug -> production_line.id at DB write.',
+    )
+    machineKey: str = Field(
+        ...,
+        description="Edge-native machine key = compound-metric-name prefix (ADR-0011 D-2: e.g. 'press'). NOT a topology UUID; ingest resolves (lineId, machineKey) -> machine.id at DB write.",
+    )
     metric: Metric
     value: float | str
     observedAt: AwareDatetime
