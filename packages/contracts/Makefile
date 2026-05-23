@@ -4,11 +4,16 @@ PYTHON_OUT := codegen/python
 KOTLIN_OUT := codegen/kotlin
 TS_OUT := codegen/typescript
 
-# codegen/python is grouped by contract family (mirrors the SoT folders
-# sparkplug/ openapi/ kafka-payloads/) so the three families never mix.
-PY_SPARKPLUG := $(PYTHON_OUT)/sparkplug
-PY_OPENAPI := $(PYTHON_OUT)/openapi
-PY_KAFKA := $(PYTHON_OUT)/kafka
+# codegen/python is an installable package `sdf_contracts` (so consumers import
+# the generated DTOs instead of hand-writing them — contract-first §2). Within it
+# the modules stay grouped by contract family (mirrors the SoT folders sparkplug/
+# openapi/ kafka-payloads/) so the three families never mix. The package scaffold
+# (pyproject.toml, __init__.py, py.typed) is hand-authored and NOT generated, so
+# `make all` never rewrites it and the drift gate stays green.
+PY_PKG := $(PYTHON_OUT)/sdf_contracts
+PY_SPARKPLUG := $(PY_PKG)/sparkplug
+PY_OPENAPI := $(PY_PKG)/openapi
+PY_KAFKA := $(PY_PKG)/kafka
 
 python:
 	mkdir -p $(PY_SPARKPLUG)
