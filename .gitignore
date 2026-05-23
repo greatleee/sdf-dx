@@ -5,3 +5,33 @@ node_modules/
 
 .omc/
 .claude/worktrees/*
+
+# Node
+node_modules/
+dist/
+.vite/
+.turbo/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Kotlin / Gradle
+.gradle/
+build/
+*.class
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Docker
+.env.local
+.env.*.local
