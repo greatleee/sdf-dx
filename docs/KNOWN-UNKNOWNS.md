@@ -2,6 +2,19 @@
 
 This document is a working acknowledgement of what this portfolio **does not** claim to model accurately. We choose "domain reliability level B — standards alignment" and explicitly disclaim "level C — operational realism" (see design spec §1.3).
 
+## Scope of the "SDF" name — what this models vs the full concept
+
+"SDF" in the target role is Hyundai Motor Group's **Software-Defined Factory**: a factory integrated as a single software OS, hardware and software decoupled across four layers (Hardware → Control → Data Platform → Application), production processes reconfigurable by software update, with a virtual-factory / digital-twin counterpart (HMGICS).
+
+This portfolio deliberately models only the **observability + standards-integration slice** of that vision — roughly the Control → Data Platform → Application data path: ingest machine telemetry (Sparkplug B), model equipment per ISA-95, compute KPIs per ISO 22400, surface them live. The software-defined *control* core is explicitly **out of scope**:
+
+- Virtualized / software-defined control (virtual PLC); hardware-software decoupling.
+- Reconfiguring a line by software update / orchestration ("factory as an OS").
+- Digital-twin / virtual-factory simulation.
+- Deterministic field networking (TSN, OPC UA FX) and the automotive data-space layer (Catena-X / Manufacturing-X).
+
+This is a scope choice, not an oversight: per design spec §1.3 we target reliability level B (standards alignment) and disclaim operational realism, and §16 (Non-Goals) rejects "운영 사실주의 흉내내기". Building the software-defined-control pillars would be exactly that imitation. The honest claim is *"I model the standards-grounded observability slice of an SDF correctly"* — not *"I built an SDF."*
+
 ## Operational realism deliberately unmodeled
 - Shift handover data consistency — assumed, not validated against any real plant.
 - PLC-vendor-specific OPC UA quirks — simulator abstracts them.
