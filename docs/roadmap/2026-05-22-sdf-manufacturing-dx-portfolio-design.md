@@ -93,7 +93,7 @@
 
 - 모든 use case → 정확히 1개의 E2E spec.
 - AC를 코드로 (BDD 식).
-- `docs/USE-CASES.md` ID ↔ E2E spec ID **1:1 매핑**.
+- `docs/spec/USE-CASES.md` ID ↔ E2E spec ID **1:1 매핑**.
 - CI gate: use case 수 ≠ spec 수면 fail (use case 누락 자동 감지).
 
 ### 2.6 LLM Drift Containment via Toolchain
@@ -542,7 +542,7 @@ ADR 형식 (Michael Nygard 변형):
 - [ ] ADR 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12 작성 완료
 - [ ] `docs/KNOWN-UNKNOWNS.md` 작성
 - [ ] `docs/DOMAIN-NOTES.md` (ISA-95/ISO 22400/Sparkplug B 흡수 노트, 인용 포함)
-- [ ] `docs/USE-CASES.md` ↔ `tests/e2e/use_cases/` 1:1 매핑
+- [ ] `docs/spec/USE-CASES.md` ↔ `tests/e2e/use_cases/` 1:1 매핑
 - [ ] AI 워크플로우 케이스 #1 문서화 (`docs/AI-WORKFLOW/case-01.md`)
 - [ ] 5분 walkthrough 영상
 - [ ] CI 통과: ruff + mypy strict + import-linter + eslint + tsc strict + detekt + Konsist + ktlint + contract codegen drift
