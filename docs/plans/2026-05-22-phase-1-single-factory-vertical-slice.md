@@ -732,6 +732,17 @@ git commit -m "docs(adr): 0001-0004 (polyglot, timescale, schema-per-tenant, fun
 
 Source: spec §2.3. Decision: every inter-service contract is a committed schema; codegen produces clients/models; CI diff gate fails on drift. Cite: OpenAPI 3.1 spec, datamodel-code-generator project, openapi-typescript project. Migration path: schema is the source of truth — services adopt the same generators when they join.
 
+**Required clauses to include (external-context research, 2026-05-23):**
+
+- **Codegen scope (Python side):** OpenAPI → Pydantic models *only* via `datamodel-code-generator`. FastAPI route handlers are hand-written against the generated models. `fastapi-code-generator` (full route-stub generation) is rejected for Phase 1 because the upstream project self-declares "experimental phase" — re-evaluate when it stabilizes. Cite: [Pydantic — datamodel_code_generator integration](https://docs.pydantic.dev/latest/integrations/datamodel_code_generator/), [fastapi-code-generator project page](https://koxudaxi.github.io/fastapi-code-generator/) (experimental notice).
+- **No hand-edits in `packages/contracts/codegen/`:** generated files are regenerated on every CI run via `make all`. Custom Pydantic validators and business-logic extensions live in `apps/api-python/src/sdf_api/contexts/<bc>/models.py` and *subclass* the generated models. Cite: [Pydantic discussion #4789 — spec-first + validators](https://github.com/pydantic/pydantic/discussions/4789).
+- **Two CI gates, not one:**
+  1. **Drift gate** — `git diff --exit-code codegen/` after `make all` (Task 9).
+  2. **Quality gate** — `spectral lint openapi/sdf-api.yaml` before codegen runs (Task 7 / 9). Rationale: drift gate only catches "generated output diverged from committed output"; spectral catches "spec itself is malformed or breaks our conventions before it becomes the SoT."
+- **Breaking-change gate (advisory in Phase 1):** `oasdiff breaking` between PR head and `main` posts a warning when OpenAPI introduces a breaking change. Phase 1 has no external consumers, so informational only; Phase 2 promotes to blocking once tenants exist.
+- **Polyglot rationale:** Phase 1 generates Pydantic + TypeScript only. Phase 2+ adds Kotlin REST via `openapi-generator` with the `kotlin-spring` generator + `delegatePattern=true` from the *same* `sdf-api.yaml`. The polyglot consumer set is the load-bearing reason we accept OpenAPI 3.1 as SoT despite FastAPI's natural code-first pull. Cite: [Baeldung — API First Development with Spring Boot and OpenAPI 3.0](https://www.baeldung.com/spring-boot-openapi-api-first-development), [openapi-generator kotlin-spring docs](https://openapi-generator.tech/docs/generators/kotlin-spring/).
+- **Polyglot consensus citation block:** [OpenAPI Initiative Best Practices](https://learn.openapis.org/best-practices.html) ("OAD as a first-class source file"), [Microsoft ISE — Design API-First with TypeSpec](https://devblogs.microsoft.com/ise/design-api-first-with-typespec/), [Malt Engineering — Contract-First FastAPI + OpenAPI](https://blog.malt.engineering/design-generate-deploy-our-contract-first-api-strategy-with-fastapi-and-openapi-15bb3e855dff).
+
 - [ ] **Step 2: Write ADR-0006 (Test speed tiering)**
 
 Source: spec §2.4 + §7. Decision: pure tests always-on (sub-second), fakes for application layer, testcontainers opt-in locally + always-on in CI. Migration path: if developer feedback loop drifts past 5s, split test corpora further.
@@ -1165,9 +1176,9 @@ components:
         observedAt: { type: string, format: date-time }
 ```
 
-- [ ] **Step 2: Extend `packages/contracts/Makefile` with OpenAPI codegen**
+- [ ] **Step 2: Extend `packages/contracts/Makefile` with OpenAPI codegen + spectral lint**
 
-Add targets:
+Add targets (note `lint` becomes a prerequisite of `verify` — the OpenAPI spec is linted *before* codegen runs, so a malformed spec is rejected upstream of any drift check):
 
 ```makefile
 openapi-python:
@@ -1182,24 +1193,44 @@ openapi-typescript:
 	pnpm dlx openapi-typescript openapi/sdf-api.yaml \
 	  -o codegen/typescript/sdf-openapi-client.ts
 
+lint:
+	pnpm dlx @stoplight/spectral-cli lint \
+	  --ruleset openapi/.spectral.yaml \
+	  openapi/sdf-api.yaml
+
 all: python kotlin openapi-python openapi-typescript
 
-verify: all
+verify: lint all
 	@git diff --exit-code codegen/ || (echo "codegen drift" && exit 1)
 ```
 
-- [ ] **Step 3: Run codegen**
+- [ ] **Step 3: Create `packages/contracts/openapi/.spectral.yaml` (minimal ruleset)**
+
+```yaml
+extends: ["spectral:oas"]
+rules:
+  # Phase 1 conventions; tighten in Phase 2 when surface grows.
+  operation-operationId: warn
+  operation-tag-defined: off
+  info-contact: off
+  info-license: off
+  oas3-unused-component: warn
+```
+
+Rationale: `spectral:oas` is Stoplight's bundled OpenAPI ruleset (OAI best practices). The overrides above relax style rules that don't apply at Phase 1 surface size (4 endpoints, no contact/license metadata yet). Source: [Spectral OpenAPI rules](https://docs.stoplight.io/docs/spectral/4dec24461f3af-open-api-rules).
+
+- [ ] **Step 4: Run lint + codegen**
 
 ```bash
-cd packages/contracts && make openapi-python && make openapi-typescript
+cd packages/contracts && make lint && make openapi-python && make openapi-typescript
 ```
-Expected: both generated files exist and contain `ProductionLine`, `LineStateSnapshot`, `OeeReading` definitions.
+Expected: spectral exits 0 (warns only); both generated files exist and contain `ProductionLine`, `LineStateSnapshot`, `OeeReading` definitions.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add packages/contracts/openapi packages/contracts/Makefile packages/contracts/codegen
-git commit -m "feat(contracts): OpenAPI 3.1 + python/ts codegen"
+git commit -m "feat(contracts): OpenAPI 3.1 + spectral lint + python/ts codegen"
 ```
 
 ---
@@ -1285,10 +1316,15 @@ git commit -m "feat(contracts): JSON Schema for Kafka payloads + pydantic codege
 
 ---
 
-### Task 9: CI codegen drift gate (early — used by every subsequent task)
+### Task 9: CI contracts gate — spectral lint + codegen drift + oasdiff (advisory)
 
 **Files:**
 - Create: `.github/workflows/contracts.yml`
+
+> Three gates in a single workflow (ADR-0005 §"Two CI gates" + breaking-change advisory):
+> 1. **Quality gate** — `spectral lint` runs *first*; a malformed spec fails fast before any codegen.
+> 2. **Drift gate** — `make all` then `git diff --exit-code codegen/`; generated artifacts must match committed.
+> 3. **Breaking-change advisory** — `oasdiff breaking` against `main`; emits a PR warning but does *not* fail the build in Phase 1 (no external consumers yet — Phase 2 promotes to blocking).
 
 - [ ] **Step 1: Create the workflow**
 
@@ -1303,10 +1339,12 @@ on:
     branches: [main]
 
 jobs:
-  drift:
+  contracts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for oasdiff against origin/main
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - uses: pnpm/action-setup@v4
@@ -1317,23 +1355,41 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Install uv
         run: pip install uv
-      - name: Regenerate
+
+      - name: Lint OpenAPI spec (spectral)
+        working-directory: packages/contracts
+        run: make lint
+
+      - name: Regenerate all contracts
         working-directory: packages/contracts
         run: make all
-      - name: Fail if generated files diverged
+
+      - name: Fail if generated files diverged (drift gate)
         working-directory: packages/contracts
         run: |
           if ! git diff --exit-code codegen/; then
             echo "::error::Codegen drift — run 'make all' in packages/contracts and commit"
             exit 1
           fi
+
+      - name: Breaking-change check (oasdiff, advisory)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          go install github.com/tufin/oasdiff@latest
+          git fetch origin ${{ github.base_ref }} --depth=1
+          git show origin/${{ github.base_ref }}:packages/contracts/openapi/sdf-api.yaml > /tmp/base-sdf-api.yaml || \
+            { echo "::notice::No baseline spec on ${{ github.base_ref }} — skipping breaking-change check" ; exit 0 ; }
+          oasdiff breaking /tmp/base-sdf-api.yaml packages/contracts/openapi/sdf-api.yaml \
+            --fail-on ERR --format githubactions || \
+            echo "::warning::OpenAPI breaking change detected (advisory in Phase 1; promoted to blocking in Phase 2)"
 ```
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add .github/workflows/contracts.yml
-git commit -m "ci(contracts): drift gate (codegen must match committed output)"
+git commit -m "ci(contracts): spectral lint + codegen drift + oasdiff (advisory) gates"
 ```
 
 ---
