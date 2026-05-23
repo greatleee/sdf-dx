@@ -10,7 +10,7 @@
 
 **Source Spec:** `docs/roadmap/2026-05-22-sdf-manufacturing-dx-portfolio-design.md` §10 Phase 1, §13.1 Phase 1 AC.
 
-**Code Architecture (load this — it supersedes plan code samples on conflict):** `docs/architecture/2026-05-23-code-architecture.md` (Engineering Conventions) + fast-scan rules `.claude/rules/backend-code-architecture.md`. Plus ADR-0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024. Reference impl for Python adapter/UoW/fakes patterns: `` (memory `reference-codebase`). Known conflicts to apply during execution: (a) core error handling — plan uses `raise X`, arch doc requires sum-type return; (b) clock / UUID — arch doc forbids `datetime.now()` / `uuid.uuid4()` inside `domain/`, inject from shell; (c) Pydantic — arch doc keeps it at boundary only, domain uses stdlib `@dataclass(frozen=True, slots=True)`; (d) cross-BC use cases — live in top-level `src/sdf_api/use_cases/`, not inside any BC's `application/`; (e) ORM containment — adapter MAY use SQLAlchemy 2.0 ORM under containment (private `_Base` / `_X` ORM classes, public `*Repo` returns domain types or primitives, no commit in adapter, no class-level Port inheritance, `Computed(persisted=True)` for GENERATED columns) — ADR-0019, supersedes any plan code that says "Core only" or restricts adapter to `asyncpg` raw; (f) Unit of Work — use case owns the transaction boundary via `async with self._uow_factory() as uow: ... await uow.commit()`; `UnitOfWork` Protocol is per-BC in `contexts/<bc>/ports/unit_of_work.py`, not global — ADR-0020; (g) Ports as folder — Port Protocols live in `contexts/<bc>/ports/<noun>.py` (folder, file-per-feature), not single `ports.py`; cross-cutting Ports in `shared_kernel/ports/<name>.py` — ADR-0022; (h) ClockPort Protocol — clock injection is always `ClockPort` Protocol from `shared_kernel/ports/clock.py`; `Callable[[], datetime]` is retired — ADR-0021; (i) `*Repo` suffix allowed on adapter and Port classes (general persistence vocabulary, not DDD-classical) — ADR-0019; (j) Fakes — `tests/contexts/<bc>/fakes.py` per BC with `InMemoryDataset` shared mutable state + `FakeUnitOfWork(dataset)` exposing `committed` / `rolled_back` flags; cross-cutting fakes (`FixedClock`) in `tests/shared_kernel/fakes.py` — ADR-0024; (k) CI gates — new contracts `adapters-no-upward` + `composition-only-imports-adapters`, AST check A3 (`uow.session` only in `composition.py`) — ADR-0023. **This plan's body is not edited to reflect these — that violates SOT-LAYERS §74. Apply at execution time.**
+**Code Architecture (load this — it supersedes plan code samples on conflict):** `docs/architecture/2026-05-23-code-architecture.md` (Engineering Conventions) + fast-scan rules `.claude/rules/backend-code-architecture.md`. Plus ADR-0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024. Reference impl for Python adapter/UoW/fakes patterns: kept locally (memory `reference-codebase`). Known conflicts to apply during execution: (a) core error handling — plan uses `raise X`, arch doc requires sum-type return; (b) clock / UUID — arch doc forbids `datetime.now()` / `uuid.uuid4()` inside `domain/`, inject from shell; (c) Pydantic — arch doc keeps it at boundary only, domain uses stdlib `@dataclass(frozen=True, slots=True)`; (d) cross-BC use cases — live in top-level `src/sdf_api/use_cases/`, not inside any BC's `application/`; (e) ORM containment — adapter MAY use SQLAlchemy 2.0 ORM under containment (private `_Base` / `_X` ORM classes, public `*Repo` returns domain types or primitives, no commit in adapter, no class-level Port inheritance, `Computed(persisted=True)` for GENERATED columns) — ADR-0019, supersedes any plan code that says "Core only" or restricts adapter to `asyncpg` raw; (f) Unit of Work — use case owns the transaction boundary via `async with self._uow_factory() as uow: ... await uow.commit()`; `UnitOfWork` Protocol is per-BC in `contexts/<bc>/ports/unit_of_work.py`, not global — ADR-0020; (g) Ports as folder — Port Protocols live in `contexts/<bc>/ports/<noun>.py` (folder, file-per-feature), not single `ports.py`; cross-cutting Ports in `shared_kernel/ports/<name>.py` — ADR-0022; (h) ClockPort Protocol — clock injection is always `ClockPort` Protocol from `shared_kernel/ports/clock.py`; `Callable[[], datetime]` is retired — ADR-0021; (i) `*Repo` suffix allowed on adapter and Port classes (general persistence vocabulary, not DDD-classical) — ADR-0019; (j) Fakes — `tests/contexts/<bc>/fakes.py` per BC with `InMemoryDataset` shared mutable state + `FakeUnitOfWork(dataset)` exposing `committed` / `rolled_back` flags; cross-cutting fakes (`FixedClock`) in `tests/shared_kernel/fakes.py` — ADR-0024; (k) CI gates — new contracts `adapters-no-upward` + `composition-only-imports-adapters`, AST check A3 (`uow.session` only in `composition.py`) — ADR-0023. **This plan's body is not edited to reflect these — that violates SOT-LAYERS §74. Apply at execution time.**
 
 **Out of Scope for Phase 1:** Multi-tenancy (Phase 2), observability/k8s (Phase 3), additional BCs (Phase 4), demo polish (Phase 5).
 
@@ -680,7 +680,13 @@ git commit -m "chore(ot-kotlin): scaffold gradle multi-module + detekt + ktlint 
 
 ---
 
-### Task 5: ADRs 1, 2, 3, 4 baseline
+## Chapter 0 — Spec & Decisions
+
+> **Policy**: Per [ADR-0000](../ADR/0000-phase-iteration-chapter-0.md), Phase 1's load-bearing spec + ADR + initial living-doc artifacts land as a contiguous batch *before* any contract / domain / adapter / UI / CI implementation commit. Section A above is pure scaffold (project-lifetime infrastructure with no domain content) and is exempt by ADR-0000 §Consequences 1.
+>
+> **Goal of Chapter 0**: freeze the decisions and the spec surface that every later session and every later commit will reference, so drift is contained and the commit log reads `chore: scaffold × 4 → docs(adr/spec) × N → feat × M → docs(revisions, ai-workflow) interspersed`.
+
+### Task C0-1: ADRs 0001–0004 (polyglot, timescale, schema-per-tenant, functional core)
 
 **Files:**
 - Create: `docs/ADR/0001-polyglot-python-kotlin.md`, `docs/ADR/0002-timescaledb-over-influxdb.md`, `docs/ADR/0003-schema-per-tenant.md`, `docs/ADR/0004-functional-core-imperative-shell.md`
@@ -707,6 +713,279 @@ Cite Gary Bernhardt's "Boundaries" talk (2012, Ruby Conf). Decision: domain modu
 git add docs/ADR/0001-polyglot-python-kotlin.md docs/ADR/0002-timescaledb-over-influxdb.md docs/ADR/0003-schema-per-tenant.md docs/ADR/0004-functional-core-imperative-shell.md
 git commit -m "docs(adr): 0001-0004 (polyglot, timescale, schema-per-tenant, functional core)"
 ```
+
+---
+
+### Task C0-2: ADRs 0005–0008, 0010–0012 (rest of Phase 1 ADR set)
+
+**Files:**
+- Create: `docs/ADR/0005-contract-first-llm-drift.md`
+- Create: `docs/ADR/0006-test-speed-tiering.md`
+- Create: `docs/ADR/0007-e2e-as-qa-coverage-gate.md`
+- Create: `docs/ADR/0008-domain-modeling-evolution.md`
+- Create: `docs/ADR/0010-architectural-fitness-tooling.md`
+- Create: `docs/ADR/0011-sparkplug-namespace.md`
+- Create: `docs/ADR/0012-oee-iso22400.md`
+
+> ADR-0009 is deferred to Phase 2 per the design spec §12 roadmap.
+> Why these belong in Chapter 0: each is a load-bearing decision known at Phase 1 planning time per ADR-0000's "load-bearing" definition (two reasonable paths × downstream code-structure impact × >1 day reversal cost). Landing them upfront prevents post-hoc rationalization mid-implementation.
+
+- [ ] **Step 1: Write ADR-0005 (Contract-first)**
+
+Source: spec §2.3. Decision: every inter-service contract is a committed schema; codegen produces clients/models; CI diff gate fails on drift. Cite: OpenAPI 3.1 spec, datamodel-code-generator project, openapi-typescript project. Migration path: schema is the source of truth — services adopt the same generators when they join.
+
+- [ ] **Step 2: Write ADR-0006 (Test speed tiering)**
+
+Source: spec §2.4 + §7. Decision: pure tests always-on (sub-second), fakes for application layer, testcontainers opt-in locally + always-on in CI. Migration path: if developer feedback loop drifts past 5s, split test corpora further.
+
+- [ ] **Step 3: Write ADR-0007 (E2E as QA, use-case coverage gate)**
+
+Source: spec §2.5. Decision: use case ↔ E2E spec 1:1; coverage script blocks merge on divergence. Migration path: when accumulating >50 use cases, split coverage report by domain.
+
+- [ ] **Step 4: Write ADR-0008 (Domain modeling evolution)**
+
+Source: spec §2.2. Decision: Phase 1 = directory-based separation; Phase 2 introduces `tenancy/`, `identity/` BCs; Phase 4 may add `quality/`. Triggers documented (ubiquitous language conflict / independent lifecycle / different owner).
+
+- [ ] **Step 5: Write ADR-0010 (Architectural fitness tooling)**
+
+Source: spec §6. Decision matrix of ruff / mypy strict / import-linter on Python; tseslint strict / eslint-plugin-boundaries / ts-prune on TS; detekt / ktlint / Konsist / `-Xexplicit-api=strict` on Kotlin. Pre-commit = milliseconds; CI = full strict. Migration path: opinion adjustments via PR with rationale; rules tightened, never silently relaxed.
+
+- [ ] **Step 6: Write ADR-0011 (Sparkplug B namespace)**
+
+Source: spec §11.1. Topic shape `spBv1.0/<group_id>/<message_type>/<edge_node_id>[/<device_id>]`. Phase 1: group_id = tenant (sdf_default), edge_node_id = line_id, device_id implied via metric-name compounding. Migration path: when device-level granularity needed for retained NBIRTH/NDEATH, split into `<edge>/<device>` topics and update bridge subscriber pattern.
+
+- [ ] **Step 7: Write ADR-0012 (OEE per ISO 22400)**
+
+Source: spec §15. Define A, P, Q, OEE; reference ISO 22400-2:2014 §5; explain Phase 1 simplification (bucket = PBT). Migration path: Phase 3 introduces planned-busy-time tracking (shift schedules) and re-derives A.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add docs/ADR/0005-* docs/ADR/0006-* docs/ADR/0007-* docs/ADR/0008-* docs/ADR/0010-* docs/ADR/0011-* docs/ADR/0012-*
+git commit -m "docs(adr): 0005-0008, 0010-0012 (Phase 1 ADR set)"
+```
+
+---
+
+### Task C0-3: UC-002 spec creation + USE-CASES.md registry row
+
+**Files:**
+- Create: `docs/spec/use-cases/UC-002-observe-oee.md`
+- Modify: `docs/spec/USE-CASES.md` (append UC-002 row; `status: draft`. The `draft → implemented` promotion is intentionally deferred to Task 24 at phase end — that requires a passing Playwright E2E to be honest.)
+
+**Pre-existing artifacts referenced (do not recreate; verify present):**
+- `docs/spec/ACTORS.md` — actor catalog (A-OP, S-UI, S-API, S-DB, …). No Phase 1 actor delta needed; Phase 1 introduces no new actors.
+- `docs/spec/GLOSSARY.md` — Phase 1 vocabulary already present (Line state, OEE, A/P/Q, CAGG, Edge Node, NBIRTH/NDEATH/NDATA, Tenant, …). No Chapter 0 delta required; revisit only if a new domain noun/verb surfaces during implementation.
+- `docs/spec/use-cases/_TEMPLATE.md` — hybrid template (YAML front-matter + narrative + event-storming + Gherkin AC).
+- `docs/spec/use-cases/UC-001-monitor-line-state.md` — UC-001 spec, already at `status: draft`.
+- `scripts/check-use-case-coverage.py` — Python coverage gate; runs via `uv run`.
+
+- [ ] **Step 1: Write `docs/spec/use-cases/UC-002-observe-oee.md`** — copy from `_TEMPLATE.md` and fill in:
+
+```markdown
+---
+id: UC-002
+title: Operator observes OEE refresh
+status: draft
+phase: 1
+primary_actor: A-OP
+secondary_actors:
+  - S-UI
+  - S-API
+  - S-DB
+bounded_context: monitoring
+related_adrs:
+  - 0012
+related_e2e: apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts
+---
+
+# UC-002 — Operator observes OEE refresh
+
+## Goal
+An operator sees the production line's current 5-minute OEE (and its A/P/Q components) on the dashboard, refreshing without manual action, so they can spot performance degradation.
+
+## Trigger
+A-OP has the dashboard open.
+
+## Preconditions
+- The line referenced by `lineId` exists.
+- At least one row exists in the `line_oee_5m` continuous aggregate (i.e., the simulator has been running long enough for the CAGG policy to have fired at least once).
+
+## Main scenario (happy path)
+1. S-UI calls `GET /api/v1/lines/{lineId}/oee?window=5m` on mount.
+2. S-API queries the most recent row of `line_oee_5m` from S-DB and derives Availability / Performance / Quality / OEE via the Phase 1 approximation (see ADR-0012).
+3. S-UI renders four tiles: OEE, Availability, Performance, Quality (percentages).
+4. Every 5 seconds, S-UI refetches the same endpoint and updates tiles in place.
+
+## Alternative flows
+- *No CAGG rows yet*: S-API returns 404; S-UI shows a "warming up" placeholder.
+- *S-API returns 5xx*: tiles retain their previous values; a stale indicator appears after >30 s without a refresh.
+
+## Commands & events (event-storming view)
+
+| # | Actor | Command (intent) | Domain event(s) emitted |
+|---|---|---|---|
+| 1 | A-OP via S-UI | `RequestLineOee(lineId, window=5m)` | — |
+| 2 | S-API → S-DB | (read of `line_oee_5m`) | — |
+
+## Invariants
+- All four returned ratios lie in `[0, 1]`.
+- `OEE = Availability × Performance × Quality` within floating-point tolerance (`≤ 1e-9` absolute).
+- Phase 1 simplification: `Availability` is approximated as `1.0` (CAGG bucket treated as planned-busy-time). See ADR-0012 and `KNOWN-UNKNOWNS.md`.
+
+## Acceptance criteria (Gherkin)
+
+```gherkin
+Feature: Operator observes OEE refresh
+
+  Scenario: OEE tiles render with percentages on first load
+    Given the line "Line A" has had at least one continuous-aggregate refresh
+    When A-OP opens the dashboard
+    Then four tiles labeled "OEE", "Availability", "Performance", "Quality" are visible within 5 seconds
+    And each tile shows a percentage value in the form "<n>.<n>%" where 0 ≤ n ≤ 100
+
+  Scenario: OEE values refresh at the polling cadence
+    Given A-OP has the dashboard open and the OEE tile shows some value V1
+    When 5 seconds elapse with new telemetry arriving
+    Then the OEE tile shows a value V2 (possibly equal to V1) without page reload
+```
+
+## Out of scope for this UC
+- *1 h / shift OEE windows* — Phase 3.
+- *Cross-line OEE rollup* — separate UC.
+- *OEE alarms* (e.g., "OEE < 60% for 30 min") — Phase 3 supervisor UC.
+
+## Open questions
+- The "refresh at polling cadence" scenario depends on simulator activity within the test window; making it deterministic in CI requires either time-mocking or seeded simulator output. Resolve at E2E implementation time; second Gherkin scenario is currently *deferred* (covered only in `fake` mode where MSW returns fresh handlers).
+```
+
+- [ ] **Step 2: Add UC-002 row to `docs/spec/USE-CASES.md`**
+
+Append below the existing UC-001 row in the index table:
+
+```markdown
+| UC-002 | Operator observes OEE refresh | draft | 1 | A-OP | monitoring | [use-cases/UC-002-observe-oee.md](use-cases/UC-002-observe-oee.md) | apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts |
+```
+
+- [ ] **Step 3: Run coverage gate (still in draft state — `related_e2e` files may not exist yet)**
+
+```bash
+uv run scripts/check-use-case-coverage.py
+```
+Expected: `OK: 2 use case(s) consistent across registry, files, and E2E.`
+(Note: `related_e2e` files do not yet exist on disk; the gate does not enforce existence while UCs are in `draft`.)
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add docs/spec/use-cases/UC-002-observe-oee.md docs/spec/USE-CASES.md
+git commit -m "docs(spec): UC-002 (operator observes OEE refresh) + registry row"
+```
+
+---
+
+### Task C0-4: KNOWN-UNKNOWNS.md initial content
+
+**Files:**
+- Create: `docs/KNOWN-UNKNOWNS.md`
+
+> Lands the file's first version. Additions and resolutions throughout the phase are **living-doc** events committed inline at the moment the gap is discovered or closed — see the Living-docs reminder below.
+
+- [ ] **Step 1: Write `docs/KNOWN-UNKNOWNS.md`**
+
+```markdown
+# Known Unknowns
+
+This document is a working acknowledgement of what this portfolio **does not** claim to model accurately. We choose "domain reliability level B — standards alignment" and explicitly disclaim "level C — operational realism" (see design spec §1.3).
+
+## Operational realism deliberately unmodeled
+- Shift handover data consistency — assumed, not validated against any real plant.
+- PLC-vendor-specific OPC UA quirks — simulator abstracts them.
+- ICS network segmentation (Purdue model) — single docker network in Phase 1.
+- Hot patch / maintenance window policy in 24/7 environments — out of scope.
+- Multi-region data sovereignty (GDPR, India DPDP) — migration path only (§14 of spec).
+
+## Intentionally unresolved (migration paths declared)
+- TimescaleDB Continuous Aggregate × RLS incompatibility (Timescale issue #5787) — not relevant in Phase 1 (no RLS); flagged for Phase 2 schema-per-tenant decision (ADR-0003).
+- Kafka exactly-once semantics — at-least-once + idempotent consumer is sufficient (ADR-0005 reasoning).
+- 100+ tenant scaling — Phase 2 ends at 3 tenants by design; migration path to Citus/RLS in ADR-0003.
+
+## Phase 1 limitations to be addressed later
+- OEE Availability assumes bucket == planned-busy-time (Phase 3 introduces shift schedules).
+- Only 5-minute OEE continuous aggregate is implemented (1h and shift in Phase 3).
+- Single implicit tenant — multi-tenancy is Phase 2.
+- No authn/authz — JWT lands in Phase 2.
+- DLQ topic (`dlq.{tenant}`) not yet implemented — invalid records are logged and dropped (see ingest in Task 18). To be added before Phase 2.
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add docs/KNOWN-UNKNOWNS.md
+git commit -m "docs(known-unknowns): initial — Phase 1 scope of disclaimed accuracy"
+```
+
+---
+
+### Task C0-5: DOMAIN-NOTES.md initial content
+
+**Files:**
+- Create: `docs/DOMAIN-NOTES.md`
+
+> Lands the file's first version. Revisions as implementation deepens understanding are **living-doc** events committed inline at the moment the new insight lands — see the Living-docs reminder below.
+
+- [ ] **Step 1: Write `docs/DOMAIN-NOTES.md` (absorption journal — cited)**
+
+```markdown
+# Domain Absorption Notes
+
+Working notes from absorbing the manufacturing domain via standards docs + vendor manuals. Each section cites a primary source.
+
+## ISA-95 — Enterprise/Control integration
+- Five-level model (L0 physical → L4 ERP). This portfolio operates L0–L2 (sensors, control, MES-edge).
+- Equipment hierarchy: Enterprise → Site → Area → Work Center → Work Unit. We model Factory → Line → Machine.
+- Source: [ISA-95.00.01-2010, ANSI/ISA — Enterprise-Control System Integration](https://www.isa.org/standards-and-publications/isa-standards/isa-standards-committees/isa95).
+
+## ISO 22400 — KPI definitions
+- OEE = Availability × Performance × Quality.
+- Availability = APT / PBT (Actual Production Time / Planned Busy Time).
+- Performance = (Ideal Cycle Time × Produced Quantity) / APT.
+- Quality = Good Quantity / Produced Quantity.
+- All components ∈ [0, 1]; OEE inherits that range.
+- Source: [ISO 22400-2:2014](https://www.iso.org/standard/56847.html).
+
+## Sparkplug B — payload + topic spec
+- Topic: `spBv1.0/<group_id>/<message_type>/<edge_node_id>[/<device_id>]`.
+- Message types: NBIRTH, NDATA, NDEATH (node); DBIRTH, DDATA, DDEATH (device); NCMD, DCMD (commands); STATE (host).
+- Sequence number rolls 0..255; gap detection prompts rebirth.
+- Source: [Sparkplug Specification v3.0, Eclipse Foundation](https://sparkplug.eclipse.org/specification/version/3.0/documents/sparkplug-specification-3.0.0.pdf).
+
+## OPC UA Companion Specifications
+- Phase 4 candidate: OPC UA for Machinery (DI base + extensions).
+- Source: [OPC Foundation — Companion Specifications](https://opcfoundation.org/developer-tools/documents).
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add docs/DOMAIN-NOTES.md
+git commit -m "docs(domain-notes): initial — ISA-95 / ISO 22400 / Sparkplug B / OPC UA absorption"
+```
+
+---
+
+### Living-docs reminder (NOT in Chapter 0 — committed throughout Sections B–J)
+
+> **Per [ADR-0000](../ADR/0000-phase-iteration-chapter-0.md) §Decision "Living documents"**, the following artifacts are committed at the moment of occurrence — not pre-written in this plan and not batched into Chapter 0:
+>
+> - **`docs/KNOWN-UNKNOWNS.md`** additions or resolutions — at the moment a gap is discovered or closed (e.g., a Hypothesis test surfaces a hidden assumption, or a Phase 1 limitation is consciously deferred). Commit message: `docs(known-unknowns): <what>`.
+> - **`docs/DOMAIN-NOTES.md`** revisions — when implementation reveals new domain insight (e.g., the OEE clamping work in Task 14 sharpens understanding of ISO 22400 §5 invariants). Commit message: `docs(domain-notes): <what>`.
+> - **`docs/AI-WORKFLOW/case-NN.md`** — written **during** the incident, not after. Triggers: an LLM hallucination caught by a guardrail (import-linter / mypy / Konsist), an unexpected drift-gate save, or a novel prompting pattern worth replaying. Phase 1 AC §13.1 requires at least one such case (`case-01.md`); the OEE absorption work in Task 14 is the most likely candidate (ISO 22400 hallucination + Hypothesis-strategy correction — see ADR-0000 §Consequences 5). Commit message: `docs(ai-workflow): case-NN — <what>`.
+> - New **`docs/ADR/NNNN.md`** for decisions that *emerge mid-phase* — written at decision time, not retroactively. Commit message: `docs(adr): NNNN — <what>`.
+>
+> **Meta-extraction**: when an incident reveals a *generic* pattern (likely to recur across phases or projects), consider also extracting it as a new **skill** under `.claude/skills/<name>/SKILL.md` or a new **rule** under `.claude/rules/<name>.md`, in addition to the case study. Skill/rule extraction is itself a living-doc event and lands as its own commit: `chore(claude): <name> — <one-line purpose>`.
+>
+> The *cadence* of these living-doc commits interleaved with `feat`/`chore` commits is itself a portfolio signal of honest iteration (ADR-0000 §Consequences 3 + 5).
 
 ---
 
@@ -4124,119 +4403,28 @@ git commit -m "feat(dashboard): line state + OEE widgets with WS live updates + 
 
 ## Section G — E2E + Use Case Gate
 
-### Task 24: Playwright E2E + UC-002 spec + promote both UCs to `implemented`
+### Task 24: Playwright E2E + promote both UCs to `implemented`
 
-**Files (created in this task):**
-- Create: `docs/spec/use-cases/UC-002-observe-oee.md`
+> **Note**: UC-002 spec creation + registry row + initial coverage-gate run were completed in Chapter 0 (Task C0-3). This task focuses solely on the Playwright E2E specs and the end-of-phase `draft → implemented` status promotion — the promotion lives here because it requires the implementation + a passing E2E to be honest (per ADR-0000 §Consequences 1: "the E2E + draft → implemented status promotion correctly remains at phase end").
+
+**Files (created or modified in this task):**
 - Create: `apps/dashboard-react/playwright.config.ts`
 - Create: `apps/dashboard-react/tests/e2e/UC-001-monitor-line-state.spec.ts`
 - Create: `apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts`
-- Modify: `docs/spec/USE-CASES.md` (add UC-002 row; flip UC-001/UC-002 `status` to `implemented` at the end)
+- Modify: `docs/spec/USE-CASES.md` (flip UC-001/UC-002 `status` cells to `implemented`)
 - Modify: `docs/spec/use-cases/UC-001-monitor-line-state.md` front-matter (flip `status` to `implemented`)
+- Modify: `docs/spec/use-cases/UC-002-observe-oee.md` front-matter (flip `status` to `implemented`)
 
 **Pre-existing artifacts referenced (do *not* recreate; verify present):**
-- `docs/spec/ACTORS.md` — actor catalog (A-OP, S-UI, S-API, S-DB, ...).
-- `docs/spec/USE-CASES.md` — registry; UC-001 row already present.
-- `docs/spec/use-cases/_TEMPLATE.md` — hybrid template (YAML front-matter + narrative + event-storming + Gherkin AC).
-- `docs/spec/use-cases/UC-001-monitor-line-state.md` — UC-001 spec (status: `draft`).
+- `docs/spec/ACTORS.md` — actor catalog.
+- `docs/spec/USE-CASES.md` — registry; UC-001 and UC-002 rows already present (UC-002 added in C0-3).
+- `docs/spec/use-cases/UC-001-monitor-line-state.md` — UC-001 spec, `status: draft`.
+- `docs/spec/use-cases/UC-002-observe-oee.md` — UC-002 spec, `status: draft` (created in C0-3).
 - `scripts/check-use-case-coverage.py` — Python coverage gate; runs via `uv run` (PEP 723 inline-script header).
 
-- [ ] **Step 1: Write `docs/spec/use-cases/UC-002-observe-oee.md`** — copy from `_TEMPLATE.md` and fill in:
+> **Reference**: UC-002 spec body lives at `docs/spec/use-cases/UC-002-observe-oee.md` (committed in C0-3). UC-001 spec body lives at `docs/spec/use-cases/UC-001-monitor-line-state.md` (committed at project start, pre-Phase-1 Chapter 0). Both spec files have `status: draft` at this point; this task creates the E2E specs they reference and then flips both to `implemented`.
 
-```markdown
----
-id: UC-002
-title: Operator observes OEE refresh
-status: draft
-phase: 1
-primary_actor: A-OP
-secondary_actors:
-  - S-UI
-  - S-API
-  - S-DB
-bounded_context: monitoring
-related_adrs:
-  - 0012
-related_e2e: apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts
----
-
-# UC-002 — Operator observes OEE refresh
-
-## Goal
-An operator sees the production line's current 5-minute OEE (and its A/P/Q components) on the dashboard, refreshing without manual action, so they can spot performance degradation.
-
-## Trigger
-A-OP has the dashboard open.
-
-## Preconditions
-- The line referenced by `lineId` exists.
-- At least one row exists in the `line_oee_5m` continuous aggregate (i.e., the simulator has been running long enough for the CAGG policy to have fired at least once).
-
-## Main scenario (happy path)
-1. S-UI calls `GET /api/v1/lines/{lineId}/oee?window=5m` on mount.
-2. S-API queries the most recent row of `line_oee_5m` from S-DB and derives Availability / Performance / Quality / OEE via the Phase 1 approximation (see ADR-0012).
-3. S-UI renders four tiles: OEE, Availability, Performance, Quality (percentages).
-4. Every 5 seconds, S-UI refetches the same endpoint and updates tiles in place.
-
-## Alternative flows
-- *No CAGG rows yet*: S-API returns 404; S-UI shows a "warming up" placeholder.
-- *S-API returns 5xx*: tiles retain their previous values; a stale indicator appears after >30 s without a refresh.
-
-## Commands & events (event-storming view)
-
-| # | Actor | Command (intent) | Domain event(s) emitted |
-|---|---|---|---|
-| 1 | A-OP via S-UI | `RequestLineOee(lineId, window=5m)` | — |
-| 2 | S-API → S-DB | (read of `line_oee_5m`) | — |
-
-## Invariants
-- All four returned ratios lie in `[0, 1]`.
-- `OEE = Availability × Performance × Quality` within floating-point tolerance (`≤ 1e-9` absolute).
-- Phase 1 simplification: `Availability` is approximated as `1.0` (CAGG bucket treated as planned-busy-time). See ADR-0012 and `KNOWN-UNKNOWNS.md`.
-
-## Acceptance criteria (Gherkin)
-
-```gherkin
-Feature: Operator observes OEE refresh
-
-  Scenario: OEE tiles render with percentages on first load
-    Given the line "Line A" has had at least one continuous-aggregate refresh
-    When A-OP opens the dashboard
-    Then four tiles labeled "OEE", "Availability", "Performance", "Quality" are visible within 5 seconds
-    And each tile shows a percentage value in the form "<n>.<n>%" where 0 ≤ n ≤ 100
-
-  Scenario: OEE values refresh at the polling cadence
-    Given A-OP has the dashboard open and the OEE tile shows some value V1
-    When 5 seconds elapse with new telemetry arriving
-    Then the OEE tile shows a value V2 (possibly equal to V1) without page reload
-```
-
-## Out of scope for this UC
-- *1 h / shift OEE windows* — Phase 3.
-- *Cross-line OEE rollup* — separate UC.
-- *OEE alarms* (e.g., "OEE < 60% for 30 min") — Phase 3 supervisor UC.
-
-## Open questions
-- The "refresh at polling cadence" scenario depends on simulator activity within the test window; making it deterministic in CI requires either time-mocking or seeded simulator output. Resolve at E2E implementation time; second Gherkin scenario is currently *deferred* (covered only in `fake` mode where MSW returns fresh handlers).
-```
-
-- [ ] **Step 2: Add UC-002 row to `docs/spec/USE-CASES.md`**
-
-Append below the existing UC-001 row in the index table:
-
-```markdown
-| UC-002 | Operator observes OEE refresh | draft | 1 | A-OP | monitoring | [use-cases/UC-002-observe-oee.md](use-cases/UC-002-observe-oee.md) | apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts |
-```
-
-- [ ] **Step 3: Run coverage gate (still in draft state)**
-
-```bash
-uv run scripts/check-use-case-coverage.py
-```
-Expected: `OK: 2 use case(s) consistent across registry, files, and E2E.`
-(Note: `related_e2e` files do not yet exist on disk; gate does not enforce existence while UCs are in `draft`.)
-
-- [ ] **Step 4: Write `apps/dashboard-react/playwright.config.ts`**
+- [ ] **Step 1: Write `apps/dashboard-react/playwright.config.ts`**
 
 ```typescript
 import { defineConfig, devices } from "@playwright/test";
@@ -4267,9 +4455,9 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: Write `UC-001-monitor-line-state.spec.ts`**
+- [ ] **Step 2: Write `UC-001-monitor-line-state.spec.ts`**
 
-Covers the *first* Gherkin scenario in UC-001. The other two (live propagation, WS-die fallback) require orchestration not yet wired in Phase 1 and are recorded as Phase 3 chaos-test candidates in `docs/KNOWN-UNKNOWNS.md` (see Task 26 — the entry "WS-disconnect fallback covered at unit-test layer only" is added there).
+Covers the *first* Gherkin scenario in UC-001. The other two (live propagation, WS-die fallback) require orchestration not yet wired in Phase 1 and should be recorded as Phase 3 chaos-test candidates in `docs/KNOWN-UNKNOWNS.md` as a **living-doc commit** at the moment this E2E spec is written (per Chapter 0 Living-docs reminder). Suggested entry: "WS-disconnect fallback covered at unit-test layer only — chaos test in Phase 3."
 
 ```typescript
 import { expect, test } from "@playwright/test";
@@ -4283,7 +4471,7 @@ test.describe("UC-001 — Operator monitors single line state", () => {
 });
 ```
 
-- [ ] **Step 6: Write `UC-002-observe-oee.spec.ts`**
+- [ ] **Step 3: Write `UC-002-observe-oee.spec.ts`**
 
 Covers UC-002's first Gherkin scenario. Second scenario ("polling cadence") deferred per UC-002 Open Questions.
 
@@ -4301,7 +4489,7 @@ test.describe("UC-002 — Operator observes OEE refresh", () => {
 });
 ```
 
-- [ ] **Step 7: Install browsers + run E2E (fake project)**
+- [ ] **Step 4: Install browsers + run E2E (fake project)**
 
 ```bash
 cd apps/dashboard-react && pnpm playwright install chromium
@@ -4309,7 +4497,7 @@ pnpm e2e:fake
 ```
 Expected: 2 tests pass (one per UC).
 
-- [ ] **Step 8: Promote UC-001 and UC-002 to `status: implemented`**
+- [ ] **Step 5: Promote UC-001 and UC-002 to `status: implemented`**
 
 In each per-UC file front-matter, change `status: draft` → `status: implemented`:
 - `docs/spec/use-cases/UC-001-monitor-line-state.md`
@@ -4317,14 +4505,14 @@ In each per-UC file front-matter, change `status: draft` → `status: implemente
 
 In `docs/spec/USE-CASES.md`, change the `Status` cell from `draft` to `implemented` for both rows.
 
-- [ ] **Step 9: Run coverage gate again (now enforces E2E file existence)**
+- [ ] **Step 6: Run coverage gate again (now enforces E2E file existence)**
 
 ```bash
 uv run scripts/check-use-case-coverage.py
 ```
 Expected: `OK: 2 use case(s)...`. The gate now verifies that both `related_e2e` paths exist on disk because both UCs are `implemented`.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add apps/dashboard-react/playwright.config.ts apps/dashboard-react/tests \
@@ -4332,164 +4520,6 @@ git add apps/dashboard-react/playwright.config.ts apps/dashboard-react/tests \
         docs/spec/use-cases/UC-001-monitor-line-state.md \
         docs/spec/USE-CASES.md
 git commit -m "test(e2e): Playwright UC-001/UC-002 + promote UCs to implemented"
-```
-
----
-
-## Section H — Documentation
-
-### Task 25: ADRs 5–8, 10–12 (Phase 1 set)
-
-**Files:**
-- Create: `docs/ADR/0005-contract-first-llm-drift.md`
-- Create: `docs/ADR/0006-test-speed-tiering.md`
-- Create: `docs/ADR/0007-e2e-as-qa-coverage-gate.md`
-- Create: `docs/ADR/0008-domain-modeling-evolution.md`
-- Create: `docs/ADR/0010-architectural-fitness-tooling.md`
-- Create: `docs/ADR/0011-sparkplug-namespace.md`
-- Create: `docs/ADR/0012-oee-iso22400.md`
-
-> ADR-9 is deferred to Phase 2 per the design spec §12 roadmap.
-
-- [ ] **Step 1: Write ADR-0005 (Contract-first)**
-
-Source: spec §2.3. Decision: every inter-service contract is a committed schema; codegen produces clients/models; CI diff gate fails on drift. Cite: OpenAPI 3.1 spec, datamodel-code-generator project, openapi-typescript project. Migration path: schema is the source of truth — services adopt the same generators when they join.
-
-- [ ] **Step 2: Write ADR-0006 (Test speed tiering)**
-
-Source: spec §2.4 + §7. Decision: pure tests always-on (sub-second), fakes for application layer, testcontainers opt-in locally + always-on in CI. Migration path: if developer feedback loop drifts past 5s, split test corpora further.
-
-- [ ] **Step 3: Write ADR-0007 (E2E as QA, use-case coverage gate)**
-
-Source: spec §2.5. Decision: use case ↔ E2E spec 1:1; coverage script blocks merge on divergence. Migration path: when accumulating >50 use cases, split coverage report by domain.
-
-- [ ] **Step 4: Write ADR-0008 (Domain modeling evolution)**
-
-Source: spec §2.2. Decision: Phase 1 = directory-based separation; Phase 2 introduces `tenancy/`, `identity/` BCs; Phase 4 may add `quality/`. Triggers documented (ubiquitous language conflict / independent lifecycle / different owner).
-
-- [ ] **Step 5: Write ADR-0010 (Architectural fitness tooling)**
-
-Source: spec §6. Decision matrix of ruff / mypy strict / import-linter on Python; tseslint strict / eslint-plugin-boundaries / ts-prune on TS; detekt / ktlint / Konsist / `-Xexplicit-api=strict` on Kotlin. Pre-commit = milliseconds; CI = full strict. Migration path: opinion adjustments via PR with rationale; rules tightened, never silently relaxed.
-
-- [ ] **Step 6: Write ADR-0011 (Sparkplug B namespace)**
-
-Source: spec §11.1. Topic shape `spBv1.0/<group_id>/<message_type>/<edge_node_id>[/<device_id>]`. Phase 1: group_id = tenant (sdf_default), edge_node_id = line_id, device_id implied via metric-name compounding. Migration path: when device-level granularity needed for retained NBIRTH/NDEATH, split into `<edge>/<device>` topics and update bridge subscriber pattern.
-
-- [ ] **Step 7: Write ADR-0012 (OEE per ISO 22400)**
-
-Source: spec §15. Define A, P, Q, OEE; reference ISO 22400-2:2014 §5; explain Phase 1 simplification (bucket = PBT). Migration path: Phase 3 introduces planned-busy-time tracking (shift schedules) and re-derives A.
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add docs/ADR/0005-* docs/ADR/0006-* docs/ADR/0007-* docs/ADR/0008-* docs/ADR/0010-* docs/ADR/0011-* docs/ADR/0012-*
-git commit -m "docs(adr): 0005-0008, 0010-0012 (Phase 1 ADR set)"
-```
-
----
-
-### Task 26: KNOWN-UNKNOWNS, DOMAIN-NOTES, AI-WORKFLOW case study
-
-**Files:**
-- Create: `docs/KNOWN-UNKNOWNS.md`
-- Create: `docs/DOMAIN-NOTES.md`
-- Create: `docs/AI-WORKFLOW/case-01.md`
-
-- [ ] **Step 1: Write `docs/KNOWN-UNKNOWNS.md`**
-
-```markdown
-# Known Unknowns
-
-This document is a working acknowledgement of what this portfolio **does not** claim to model accurately. We choose "domain reliability level B — standards alignment" and explicitly disclaim "level C — operational realism" (see design spec §1.3).
-
-## Operational realism deliberately unmodeled
-- Shift handover data consistency — assumed, not validated against any real plant.
-- PLC-vendor-specific OPC UA quirks — simulator abstracts them.
-- ICS network segmentation (Purdue model) — single docker network in Phase 1.
-- Hot patch / maintenance window policy in 24/7 environments — out of scope.
-- Multi-region data sovereignty (GDPR, India DPDP) — migration path only (§14 of spec).
-
-## Intentionally unresolved (migration paths declared)
-- TimescaleDB Continuous Aggregate × RLS incompatibility (Timescale issue #5787) — not relevant in Phase 1 (no RLS); flagged for Phase 2 schema-per-tenant decision (ADR-0003).
-- Kafka exactly-once semantics — at-least-once + idempotent consumer is sufficient (ADR-0005 reasoning).
-- 100+ tenant scaling — Phase 2 ends at 3 tenants by design; migration path to Citus/RLS in ADR-0003.
-
-## Phase 1 limitations to be addressed later
-- OEE Availability assumes bucket == planned-busy-time (Phase 3 introduces shift schedules).
-- Only 5-minute OEE continuous aggregate is implemented (1h and shift in Phase 3).
-- Single implicit tenant — multi-tenancy is Phase 2.
-- No authn/authz — JWT lands in Phase 2.
-```
-
-- [ ] **Step 2: Write `docs/DOMAIN-NOTES.md` (absorption journal — cited)**
-
-Structure:
-```markdown
-# Domain Absorption Notes
-
-Working notes from absorbing the manufacturing domain via standards docs + vendor manuals. Each section cites a primary source.
-
-## ISA-95 — Enterprise/Control integration
-- Five-level model (L0 physical → L4 ERP). This portfolio operates L0–L2 (sensors, control, MES-edge).
-- Equipment hierarchy: Enterprise → Site → Area → Work Center → Work Unit. We model Factory → Line → Machine.
-- Source: [ISA-95.00.01-2010, ANSI/ISA — Enterprise-Control System Integration](https://www.isa.org/standards-and-publications/isa-standards/isa-standards-committees/isa95).
-
-## ISO 22400 — KPI definitions
-- OEE = Availability × Performance × Quality.
-- Availability = APT / PBT (Actual Production Time / Planned Busy Time).
-- Performance = (Ideal Cycle Time × Produced Quantity) / APT.
-- Quality = Good Quantity / Produced Quantity.
-- All components ∈ [0, 1]; OEE inherits that range.
-- Source: [ISO 22400-2:2014](https://www.iso.org/standard/56847.html).
-
-## Sparkplug B — payload + topic spec
-- Topic: `spBv1.0/<group_id>/<message_type>/<edge_node_id>[/<device_id>]`.
-- Message types: NBIRTH, NDATA, NDEATH (node); DBIRTH, DDATA, DDEATH (device); NCMD, DCMD (commands); STATE (host).
-- Sequence number rolls 0..255; gap detection prompts rebirth.
-- Source: [Sparkplug Specification v3.0, Eclipse Foundation](https://sparkplug.eclipse.org/specification/version/3.0/documents/sparkplug-specification-3.0.0.pdf).
-
-## OPC UA Companion Specifications
-- Phase 4 candidate: OPC UA for Machinery (DI base + extensions).
-- Source: [OPC Foundation — Companion Specifications](https://opcfoundation.org/developer-tools/documents).
-```
-
-- [ ] **Step 3: Write `docs/AI-WORKFLOW/case-01.md`**
-
-```markdown
-# AI Workflow Case Study #1 — Absorbing ISO 22400 OEE
-
-## Scenario
-Need to implement OEE per ISO 22400-2 §5 without prior domain background.
-
-## Approach (the gate, not the prompt)
-1. **Read primary source first.** Skimmed ISO 22400-2 §5 definitions (Availability, Performance, Quality) — 15 min. Captured glossary terms (APT, PBT, ICT, PQ, GQ) in `docs/DOMAIN-NOTES.md` *before* asking the LLM anything.
-2. **Asked LLM for a formula restatement** with explicit "do not invent variables, cite the standard" framing. Verified each formula by spot-checking against the standard.
-3. **Asked LLM for property-based test cases** ("write Hypothesis strategies for inputs that exercise edge cases" — boundary values, zero PBT, good > produced).
-4. **Wrote the production code last, by hand.** Pasting the LLM's draft would have made `min`/`max` clamping non-defensive; manual rewrite added explicit `_clamp01`.
-
-## What the LLM got wrong (caught by guardrails)
-- First draft hallucinated a "Setup Time" factor that ISO 22400 does **not** include in OEE (it's tracked separately as a sub-KPI). Caught by spot-checking against §5 of the standard.
-- First draft of Hypothesis strategy used uniform floats from `-1.0` to `2.0` for "ratios" — would have generated invalid inputs and "passing" tests that prove nothing. Constrained to `[0, 1]` after review.
-
-## Where guardrails fired
-- `import-linter` rule "domain must not depend on adapters or external infra" caught a stray `import asyncpg` that the LLM inserted "to fetch planned busy time from DB". Forced refactor — the domain function now takes `OeeInputs` as a value object; the adapter does the DB fetch.
-- `mypy --strict` rejected an `Any`-typed return from a helper. Forced explicit `OeeResult`.
-- Property test caught the missing `_clamp01` on the quality field (when `good > produced`, raw ratio exceeded 1.0).
-
-## Time breakdown
-- 15 min reading standard.
-- 10 min iterating with LLM on formula + tests.
-- 25 min writing code + tests + reading mypy/import-linter complaints.
-
-## Takeaway
-LLM accelerates the *domain summary* and *test case enumeration*. It cannot be trusted with the *clamping / boundary* semantics — that is exactly where guardrails earn their cost.
-```
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add docs/KNOWN-UNKNOWNS.md docs/DOMAIN-NOTES.md docs/AI-WORKFLOW
-git commit -m "docs: KNOWN-UNKNOWNS + DOMAIN-NOTES + AI-WORKFLOW case-01 (OEE)"
 ```
 
 ---
@@ -4834,7 +4864,7 @@ Show C4 context diagram (or README ASCII flow). Call out three guardrails:
 3. *Use-case coverage gate* — every entry in `USE-CASES.md` has exactly one Playwright spec; CI counts them.
 
 ## Beat 3 (1:30–3:00) — One concrete decision
-Open `docs/ADR/0002-timescaledb-over-influxdb.md`. Narrate: "InfluxDB has 4× the line share. I chose TimescaleDB anyway, and the ADR cites the evidence on both sides plus a migration path. This is the JD's 'tradeoff + migration strategy' requirement, shown not told."
+Open `docs/ADR/0002-timescaledb-over-influxdb.md`. Narrate: "InfluxDB has 4× the market share. I chose TimescaleDB anyway, and the ADR cites the evidence on both sides plus a migration path. This is the JD's 'tradeoff + migration strategy' requirement, shown not told."
 
 ## Beat 4 (3:00–4:00) — One concrete LLM workflow
 Open `docs/AI-WORKFLOW/case-01.md`. Narrate the OEE absorption: read the standard first, generate property-based tests via LLM, *guardrails caught the hallucinated "Setup Time" factor and the unconstrained Hypothesis strategy*. This is "knowing when to trust AI output".
@@ -4930,22 +4960,22 @@ After every task above is checked off:
 - ✅ §2 principles — Tasks 12–15 (pure domain), 6–9 (contracts), 18+19 (test tiering), 24 (E2E gate), 28 (drift toolchain).
 - ✅ §3 architecture — Tasks 11, 16, 17, 18, 19, 20, 21 build the polyglot system top to bottom.
 - ✅ §4 data flow — Tasks 16→17→18→19→20→23 implement the full path simulator → MQTT → bridge → Kafka → ingest → Timescale → API → WS → React.
-- ✅ §5 storage + multi-tenancy — Task 10 lays Phase 1 single-tenant schema; ADR-0003 (Task 5) documents the schema-per-tenant migration; cross-tenant work is explicitly Phase 2.
+- ✅ §5 storage + multi-tenancy — Task 10 lays Phase 1 single-tenant schema; ADR-0003 (Task C0-1) documents the schema-per-tenant migration; cross-tenant work is explicitly Phase 2.
 - ✅ §6 LLM drift toolchain — Tasks 2, 3, 4 wire the per-language tools; Task 28 wires pre-commit; Task 27 wires CI.
 - ✅ §7 testing strategy — Tasks 12–15 (pure), 19 (fakes/app), 18 (integration testcontainers), 24 (E2E), Task 14 (Hypothesis property).
 - ✅ §8 error handling baseline — Task 18 (DLQ skipping on InvalidRecord with logging), Task 23 (WS→polling fallback). Note: explicit DLQ topic (`dlq.{tenant}`) is **not** in this plan — see gap below.
 - ✅ §9 repo structure — Task 1 + the per-app scaffolds match the spec's tree.
 - ✅ §10 Phase 1 deliverable — full task chain matches.
 - ✅ §11.1 live demo — Scenario A (Task 30); Scenario C (main demo) is Phase 2/3 work since it requires the contract pipeline and multi-tenancy.
-- ✅ §12 ADR roadmap — Tasks 5, 25 cover Phase 1 ADR set (1–8, 10–12). ADR-9 deferred to Phase 2 as the spec specifies.
+- ✅ §12 ADR roadmap — Chapter 0 Tasks C0-1 and C0-2 cover the Phase 1 ADR set (0001–0008, 0010–0012). ADR-0009 deferred to Phase 2 as the spec specifies.
 - ✅ §13.1 AC — every bullet has a matching task line in the AC section above.
-- ✅ §14 known unknowns — Task 26 writes them.
+- ✅ §14 known unknowns — Chapter 0 Task C0-4 lands the initial `KNOWN-UNKNOWNS.md`; subsequent additions land as living-doc commits at the moment of discovery (per Chapter 0 Living-docs reminder).
 - ✅ §15 sources — DOMAIN-NOTES cites ISA-95, ISO 22400, Sparkplug, OPC UA.
 - ✅ §16 non-goals — respected (no real PLC, no ML, no mobile).
 - ✅ §17 open questions — Task 4 resolves the simulator-vs-gateway question explicitly (single Gradle root with three submodules).
 
 ### Gap fixes applied during self-review
-- **Spec §8.1 explicit DLQ topic.** The plan logs invalid records but does not write them to `dlq.{tenant}`. Acceptable Phase 1 simplification *if explicitly listed in KNOWN-UNKNOWNS*. Action: append a Phase 1 limitation to KNOWN-UNKNOWNS in Task 26 reading: "DLQ topic not yet implemented — invalid records are logged and dropped. To be added before Phase 2."
+- **Spec §8.1 explicit DLQ topic.** The plan logs invalid records but does not write them to `dlq.{tenant}`. Acceptable Phase 1 simplification *if explicitly listed in KNOWN-UNKNOWNS*. Action: already folded into Chapter 0 Task C0-4 §"Phase 1 limitations to be addressed later" — see the DLQ bullet there.
 - **Health probe DB+Kafka.** Task 19 implements `/readyz` for DB only. Spec §8.1 requires DB + Kafka. Action: extend `readyz` to ping the Kafka bootstrap (add a step to Task 19 — small, included via inline note rather than a new task).
 
 ### Placeholder scan
@@ -4961,7 +4991,7 @@ After every task above is checked off:
 - `sparkplug_seq` smallint in DB (Task 10), `sparkplugSeq` int in JSON (Task 8), `sparkplug_seq: int` in Python (Task 18) — wire format matches, naming follows each language's convention.
 
 ### Two-stage fixes folded back into the relevant tasks
-- KNOWN-UNKNOWNS now must include the DLQ caveat (Task 26 §"Phase 1 limitations").
+- KNOWN-UNKNOWNS now includes the DLQ caveat (Chapter 0 Task C0-4 §"Phase 1 limitations").
 - `/readyz` enhanced to include Kafka ping (Task 19 Step 7 — inline within the existing `readyz` body).
 
 ---

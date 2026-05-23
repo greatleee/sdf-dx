@@ -158,5 +158,5 @@ These are common in the industry but ambiguous, vendor-locked, or load-bearing f
 | "Equipment" | ISA-95 uses it for any of L0–L2; too vague at our level. | *Machine*, *Line*, *Factory* — pick the precise level. |
 | "Telemetry stream" | Collides with OTel/monitoring "telemetry". | *Sparkplug data* (when about the edge), *machine telemetry* (when about a DB row). |
 | "Real-time" | Implausibly precise; we are seconds-latency at best. | "live" (sub-second observable), or quote the actual SLA. |
-| "Smart factory" | Vendor lineing. | "manufacturing platform", "DX platform", or the concrete capability. |
+| "Smart factory" | Vendor marketing. | "manufacturing platform", "DX platform", or the concrete capability. |
 | "Status" | Used interchangeably with *Line state* and HTTP status — ambiguous. | *Line state*, or be explicit ("HTTP response status"). |
