@@ -21,8 +21,10 @@ jobs:
           fetch-depth: 0  # needed for oasdiff against origin/main
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      # No `version:` — pnpm/action-setup@v4 reads it from the root
+      # package.json `packageManager` field (pnpm@9.12.0). Specifying both
+      # is an ERR_PNPM_BAD_PM_VERSION hard error.
       - uses: pnpm/action-setup@v4
-        with: { version: 9 }
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
       - name: Install pinned protoc
