@@ -1,6 +1,6 @@
 # Backend Code Architecture — Rules
 
-Fast-scan condensation of `docs/architecture/2026-05-23-code-architecture.md` + ADRs 0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024. Reference impl: kept locally(see memory `reference-codebase`).
+Fast-scan condensation of `docs/architecture/2026-05-23-code-architecture.md` + ADRs 0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024. Reference impl: kept locally (see memory `reference-codebase`).
 
 Arch doc carries full rationale; this file is rules-only, do/don't form. On conflict between Phase 1 plan code samples and these rules, these rules win (per plan header forward reference).
 
@@ -235,4 +235,4 @@ DO NOT disable a contract to make code pass. Fix the code.
 
 ---
 
-Full rationale: `docs/architecture/2026-05-23-code-architecture.md`. Decision records: `docs/ADR/0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024`. Reference impl: kept locally(memory `reference-codebase`).
+Full rationale: `docs/architecture/2026-05-23-code-architecture.md`. Decision records: `docs/ADR/0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024`. Reference impl: kept locally (memory `reference-codebase`).
