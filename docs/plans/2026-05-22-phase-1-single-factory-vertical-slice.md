@@ -8,7 +8,7 @@
 
 **Tech Stack:** Kotlin 2.0 + Spring Boot 3 + Eclipse Tahu + Paho · Python 3.12 + FastAPI + aiokafka + asyncpg + Pydantic v2 · React 18 + Vite + TypeScript 5 + TanStack Query + Tailwind + Recharts + react-i18next · PostgreSQL 16 + TimescaleDB 2.15 · HiveMQ CE 2024 · Redpanda 24 (Kafka-compatible) · Playwright 1.4x · MSW 2 · Docker Compose v2.
 
-**Source Spec:** `docs/superpowers/specs/2026-05-22-sdf-manufacturing-dx-portfolio-design.md` §10 Phase 1, §13.1 Phase 1 AC.
+**Source Spec:** `docs/roadmap/2026-05-22-sdf-manufacturing-dx-portfolio-design.md` §10 Phase 1, §13.1 Phase 1 AC.
 
 **Out of Scope for Phase 1:** Multi-tenancy (Phase 2), observability/k8s (Phase 3), additional BCs (Phase 4), demo polish (Phase 5).
 
@@ -37,12 +37,16 @@ sdf-dx/
 ├── infra/
 │   └── timescale/init/             # SQL bootstrap
 ├── docs/
-│   ├── adr/                        # 0001..0012 ADRs
+│   ├── ADR/                        # 0001..0012 ADRs
 │   ├── KNOWN-UNKNOWNS.md
 │   ├── DOMAIN-NOTES.md
-│   ├── USE-CASES.md
 │   ├── AI-WORKFLOW/case-01.md
-│   └── superpowers/plans/          # this file
+│   ├── spec/                       # behavior catalog (already present)
+│   │   ├── ACTORS.md
+│   │   ├── USE-CASES.md            # registry/index
+│   │   └── use-cases/              # per-UC spec files (hybrid template)
+│   ├── plans/                      # this file
+│   └── roadmap/                    # design spec lives here
 └── scripts/
     └── live-demo/scenario-a.md     # Phase 1 live-demo script
 ```
@@ -56,7 +60,7 @@ sdf-dx/
 **Files:**
 - Create: `package.json`, `pnpm-workspace.yaml`, `.editorconfig`, `.gitattributes`
 - Modify: `.gitignore`, `README.md`
-- Create: `docs/adr/template.md`
+- Create: `docs/ADR/template.md`
 
 - [ ] **Step 1: Update root `.gitignore`**
 
@@ -137,7 +141,7 @@ indent_size = 4
 indent_style = tab
 ```
 
-- [ ] **Step 5: Create `docs/adr/template.md`**
+- [ ] **Step 5: Create `docs/ADR/template.md`**
 
 ```markdown
 # ADR-NNNN: <Title>
@@ -177,7 +181,7 @@ indent_style = tab
 
 End-to-end vertical slice of a Smart-Factory Data Fabric: Sparkplug B over MQTT → Kafka → TimescaleDB → FastAPI → React. Demonstrates AI-augmented senior full-stack engineering with explicit drift containment (contract-first, functional core, architecture-as-tests).
 
-> **Phase 1 status:** in progress. See `docs/superpowers/plans/2026-05-22-phase-1-single-factory-vertical-slice.md`.
+> **Phase 1 status:** in progress. See `docs/plans/2026-05-22-phase-1-single-factory-vertical-slice.md`.
 
 ## Quick start
 ```bash
@@ -185,9 +189,9 @@ docker compose up
 ```
 
 ## Documentation
-- Design spec: `docs/superpowers/specs/2026-05-22-sdf-manufacturing-dx-portfolio-design.md`
-- ADRs: `docs/adr/`
-- Use cases: `docs/USE-CASES.md`
+- Design spec: `docs/roadmap/2026-05-22-sdf-manufacturing-dx-portfolio-design.md`
+- ADRs: `docs/ADR/`
+- Use cases: `docs/spec/USE-CASES.md` (registry); per-UC specs under `docs/spec/use-cases/`
 - Known limits: `docs/KNOWN-UNKNOWNS.md`
 - Domain absorption notes: `docs/DOMAIN-NOTES.md`
 - AI workflow case studies: `docs/AI-WORKFLOW/`
@@ -196,7 +200,7 @@ docker compose up
 - [ ] **Step 7: Commit**
 
 ```bash
-git add .gitignore pnpm-workspace.yaml package.json .editorconfig README.md docs/adr/template.md
+git add .gitignore pnpm-workspace.yaml package.json .editorconfig README.md docs/ADR/template.md
 git commit -m "chore(repo): scaffold monorepo root + ADR template"
 ```
 
@@ -677,7 +681,7 @@ git commit -m "chore(ot-kotlin): scaffold gradle multi-module + detekt + ktlint 
 ### Task 5: ADRs 1, 2, 3, 4 baseline
 
 **Files:**
-- Create: `docs/adr/0001-polyglot-python-kotlin.md`, `docs/adr/0002-timescaledb-over-influxdb.md`, `docs/adr/0003-schema-per-tenant.md`, `docs/adr/0004-functional-core-imperative-shell.md`
+- Create: `docs/ADR/0001-polyglot-python-kotlin.md`, `docs/ADR/0002-timescaledb-over-influxdb.md`, `docs/ADR/0003-schema-per-tenant.md`, `docs/ADR/0004-functional-core-imperative-shell.md`
 
 - [ ] **Step 1: Write ADR-0001 (Polyglot)**
 
@@ -698,7 +702,7 @@ Cite Gary Bernhardt's "Boundaries" talk (2012, Ruby Conf). Decision: domain modu
 - [ ] **Step 5: Commit**
 
 ```bash
-git add docs/adr/0001-polyglot-python-kotlin.md docs/adr/0002-timescaledb-over-influxdb.md docs/adr/0003-schema-per-tenant.md docs/adr/0004-functional-core-imperative-shell.md
+git add docs/ADR/0001-polyglot-python-kotlin.md docs/ADR/0002-timescaledb-over-influxdb.md docs/ADR/0003-schema-per-tenant.md docs/ADR/0004-functional-core-imperative-shell.md
 git commit -m "docs(adr): 0001-0004 (polyglot, timescale, schema-per-tenant, functional core)"
 ```
 
@@ -738,7 +742,7 @@ make kotlin
 
 ## Topic namespace
 `spBv1.0/<group_id>/<message_type>/<edge_node_id>[/<device_id>]`
-where for Phase 1: `group_id=sdf_default`, `edge_node_id=<line_id>`, `device_id=<machine_id>`. See `docs/adr/0011-sparkplug-namespace.md`.
+where for Phase 1: `group_id=sdf_default`, `edge_node_id=<line_id>`, `device_id=<machine_id>`. See `docs/ADR/0011-sparkplug-namespace.md`.
 ```
 
 - [ ] **Step 3: Create `packages/contracts/Makefile`**
@@ -4118,29 +4122,119 @@ git commit -m "feat(dashboard): line state + OEE widgets with WS live updates + 
 
 ## Section G — E2E + Use Case Gate
 
-### Task 24: USE-CASES.md + Playwright E2E with use-case-count CI gate
+### Task 24: Playwright E2E + UC-002 spec + promote both UCs to `implemented`
 
-**Files:**
-- Create: `docs/USE-CASES.md`
+**Files (created in this task):**
+- Create: `docs/spec/use-cases/UC-002-observe-oee.md`
 - Create: `apps/dashboard-react/playwright.config.ts`
-- Create: `apps/dashboard-react/tests/e2e/UC-001-monitor-single-line-state.spec.ts`
-- Create: `apps/dashboard-react/tests/e2e/UC-002-observe-oee-update.spec.ts`
-- Create: `scripts/check-use-case-coverage.sh`
+- Create: `apps/dashboard-react/tests/e2e/UC-001-monitor-line-state.spec.ts`
+- Create: `apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts`
+- Modify: `docs/spec/USE-CASES.md` (add UC-002 row; flip UC-001/UC-002 `status` to `implemented` at the end)
+- Modify: `docs/spec/use-cases/UC-001-monitor-line-state.md` front-matter (flip `status` to `implemented`)
 
-- [ ] **Step 1: Write `docs/USE-CASES.md`**
+**Pre-existing artifacts referenced (do *not* recreate; verify present):**
+- `docs/spec/ACTORS.md` — actor catalog (A-OP, S-UI, S-API, S-DB, ...).
+- `docs/spec/USE-CASES.md` — registry; UC-001 row already present.
+- `docs/spec/use-cases/_TEMPLATE.md` — hybrid template (YAML front-matter + narrative + event-storming + Gherkin AC).
+- `docs/spec/use-cases/UC-001-monitor-line-state.md` — UC-001 spec (status: `draft`).
+- `scripts/check-use-case-coverage.py` — Python coverage gate; runs via `uv run` (PEP 723 inline-script header).
+
+- [ ] **Step 1: Write `docs/spec/use-cases/UC-002-observe-oee.md`** — copy from `_TEMPLATE.md` and fill in:
 
 ```markdown
-# Use Cases
+---
+id: UC-002
+title: Operator observes OEE refresh
+status: draft
+phase: 1
+primary_actor: A-OP
+secondary_actors:
+  - S-UI
+  - S-API
+  - S-DB
+bounded_context: monitoring
+related_adrs:
+  - 0012
+related_e2e: apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts
+---
 
-Each row is a contractual user-facing capability. Each maps 1:1 to a Playwright spec under `apps/dashboard-react/tests/e2e/`. CI fails if the counts diverge.
+# UC-002 — Operator observes OEE refresh
 
-| ID     | Title                              | Spec file                                                  | Phase |
-|--------|------------------------------------|------------------------------------------------------------|-------|
-| UC-001 | Operator monitors single line state | `UC-001-monitor-single-line-state.spec.ts`                | 1     |
-| UC-002 | Operator observes OEE refresh      | `UC-002-observe-oee-update.spec.ts`                       | 1     |
+## Goal
+An operator sees the production line's current 5-minute OEE (and its A/P/Q components) on the dashboard, refreshing without manual action, so they can spot performance degradation.
+
+## Trigger
+A-OP has the dashboard open.
+
+## Preconditions
+- The line referenced by `lineId` exists.
+- At least one row exists in the `line_oee_5m` continuous aggregate (i.e., the simulator has been running long enough for the CAGG policy to have fired at least once).
+
+## Main scenario (happy path)
+1. S-UI calls `GET /api/v1/lines/{lineId}/oee?window=5m` on mount.
+2. S-API queries the most recent row of `line_oee_5m` from S-DB and derives Availability / Performance / Quality / OEE via the Phase 1 approximation (see ADR-0012).
+3. S-UI renders four tiles: OEE, Availability, Performance, Quality (percentages).
+4. Every 5 seconds, S-UI refetches the same endpoint and updates tiles in place.
+
+## Alternative flows
+- *No CAGG rows yet*: S-API returns 404; S-UI shows a "warming up" placeholder.
+- *S-API returns 5xx*: tiles retain their previous values; a stale indicator appears after >30 s without a refresh.
+
+## Commands & events (event-storming view)
+
+| # | Actor | Command (intent) | Domain event(s) emitted |
+|---|---|---|---|
+| 1 | A-OP via S-UI | `RequestLineOee(lineId, window=5m)` | — |
+| 2 | S-API → S-DB | (read of `line_oee_5m`) | — |
+
+## Invariants
+- All four returned ratios lie in `[0, 1]`.
+- `OEE = Availability × Performance × Quality` within floating-point tolerance (`≤ 1e-9` absolute).
+- Phase 1 simplification: `Availability` is approximated as `1.0` (CAGG bucket treated as planned-busy-time). See ADR-0012 and `KNOWN-UNKNOWNS.md`.
+
+## Acceptance criteria (Gherkin)
+
+```gherkin
+Feature: Operator observes OEE refresh
+
+  Scenario: OEE tiles render with percentages on first load
+    Given the line "Line A" has had at least one continuous-aggregate refresh
+    When A-OP opens the dashboard
+    Then four tiles labeled "OEE", "Availability", "Performance", "Quality" are visible within 5 seconds
+    And each tile shows a percentage value in the form "<n>.<n>%" where 0 ≤ n ≤ 100
+
+  Scenario: OEE values refresh at the polling cadence
+    Given A-OP has the dashboard open and the OEE tile shows some value V1
+    When 5 seconds elapse with new telemetry arriving
+    Then the OEE tile shows a value V2 (possibly equal to V1) without page reload
 ```
 
-- [ ] **Step 2: Write `playwright.config.ts`**
+## Out of scope for this UC
+- *1 h / shift OEE windows* — Phase 3.
+- *Cross-line OEE rollup* — separate UC.
+- *OEE alarms* (e.g., "OEE < 60% for 30 min") — Phase 3 supervisor UC.
+
+## Open questions
+- The "refresh at polling cadence" scenario depends on simulator activity within the test window; making it deterministic in CI requires either time-mocking or seeded simulator output. Resolve at E2E implementation time; second Gherkin scenario is currently *deferred* (covered only in `fake` mode where MSW returns fresh handlers).
+```
+
+- [ ] **Step 2: Add UC-002 row to `docs/spec/USE-CASES.md`**
+
+Append below the existing UC-001 row in the index table:
+
+```markdown
+| UC-002 | Operator observes OEE refresh | draft | 1 | A-OP | monitoring | [use-cases/UC-002-observe-oee.md](use-cases/UC-002-observe-oee.md) | apps/dashboard-react/tests/e2e/UC-002-observe-oee.spec.ts |
+```
+
+- [ ] **Step 3: Run coverage gate (still in draft state)**
+
+```bash
+uv run scripts/check-use-case-coverage.py
+```
+Expected: `OK: 2 use case(s) consistent across registry, files, and E2E.`
+(Note: `related_e2e` files do not yet exist on disk; gate does not enforce existence while UCs are in `draft`.)
+
+- [ ] **Step 4: Write `apps/dashboard-react/playwright.config.ts`**
 
 ```typescript
 import { defineConfig, devices } from "@playwright/test";
@@ -4171,80 +4265,71 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 3: Write `UC-001-monitor-single-line-state.spec.ts`**
+- [ ] **Step 5: Write `UC-001-monitor-line-state.spec.ts`**
+
+Covers the *first* Gherkin scenario in UC-001. The other two (live propagation, WS-die fallback) require orchestration not yet wired in Phase 1 and are recorded as Phase 3 chaos-test candidates in `docs/KNOWN-UNKNOWNS.md` (see Task 26 — the entry "WS-disconnect fallback covered at unit-test layer only" is added there).
 
 ```typescript
 import { expect, test } from "@playwright/test";
 
-test("UC-001: operator monitors single line state", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: /SDF Manufacturing DX/i })).toBeVisible();
-  await expect(page.getByText(/RUNNING|IDLE|DOWN|CHANGEOVER/)).toBeVisible({ timeout: 5_000 });
+test.describe("UC-001 — Operator monitors single line state", () => {
+  test("Dashboard shows current state on first load", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: /SDF Manufacturing DX/i })).toBeVisible();
+    await expect(page.getByText(/RUNNING|IDLE|DOWN|CHANGEOVER/)).toBeVisible({ timeout: 5_000 });
+  });
 });
 ```
 
-- [ ] **Step 4: Write `UC-002-observe-oee-update.spec.ts`**
+- [ ] **Step 6: Write `UC-002-observe-oee.spec.ts`**
+
+Covers UC-002's first Gherkin scenario. Second scenario ("polling cadence") deferred per UC-002 Open Questions.
 
 ```typescript
 import { expect, test } from "@playwright/test";
 
-test("UC-002: operator observes OEE values rendered", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByText("OEE")).toBeVisible();
-  await expect(page.getByText(/\d+(\.\d+)?%/).first()).toBeVisible({ timeout: 5_000 });
+test.describe("UC-002 — Operator observes OEE refresh", () => {
+  test("OEE tiles render with percentages on first load", async ({ page }) => {
+    await page.goto("/");
+    for (const label of ["OEE", "Availability", "Performance", "Quality"]) {
+      await expect(page.getByText(label)).toBeVisible({ timeout: 5_000 });
+    }
+    await expect(page.getByText(/\d+(\.\d+)?%/).first()).toBeVisible({ timeout: 5_000 });
+  });
 });
 ```
 
-- [ ] **Step 5: Coverage check script `scripts/check-use-case-coverage.sh`**
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-USECASES_FILE="docs/USE-CASES.md"
-E2E_DIR="apps/dashboard-react/tests/e2e"
-
-uc_count=$(grep -cE '^\| UC-[0-9]+' "$USECASES_FILE")
-spec_count=$(find "$E2E_DIR" -name 'UC-*.spec.ts' | wc -l | tr -d ' ')
-
-if [[ "$uc_count" != "$spec_count" ]]; then
-  echo "ERROR: USE-CASES rows ($uc_count) != E2E specs ($spec_count)"
-  echo "rows:"
-  grep -E '^\| UC-[0-9]+' "$USECASES_FILE" | awk -F'|' '{print $2}'
-  echo "specs:"
-  find "$E2E_DIR" -name 'UC-*.spec.ts' -printf '%f\n'
-  exit 1
-fi
-
-echo "OK: $uc_count use cases, $spec_count specs"
-```
-
-Make executable:
-
-```bash
-chmod +x scripts/check-use-case-coverage.sh
-```
-
-- [ ] **Step 6: Install browsers + run E2E (fake project)**
+- [ ] **Step 7: Install browsers + run E2E (fake project)**
 
 ```bash
 cd apps/dashboard-react && pnpm playwright install chromium
 pnpm e2e:fake
 ```
-Expected: 2 specs pass.
+Expected: 2 tests pass (one per UC).
 
-- [ ] **Step 7: Run coverage gate**
+- [ ] **Step 8: Promote UC-001 and UC-002 to `status: implemented`**
+
+In each per-UC file front-matter, change `status: draft` → `status: implemented`:
+- `docs/spec/use-cases/UC-001-monitor-line-state.md`
+- `docs/spec/use-cases/UC-002-observe-oee.md`
+
+In `docs/spec/USE-CASES.md`, change the `Status` cell from `draft` to `implemented` for both rows.
+
+- [ ] **Step 9: Run coverage gate again (now enforces E2E file existence)**
 
 ```bash
-./scripts/check-use-case-coverage.sh
+uv run scripts/check-use-case-coverage.py
 ```
-Expected: `OK: 2 use cases, 2 specs`.
+Expected: `OK: 2 use case(s)...`. The gate now verifies that both `related_e2e` paths exist on disk because both UCs are `implemented`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add docs/USE-CASES.md apps/dashboard-react/playwright.config.ts apps/dashboard-react/tests scripts/check-use-case-coverage.sh
-git commit -m "test(e2e): Playwright UC-001/UC-002 + use-case coverage CI gate"
+git add apps/dashboard-react/playwright.config.ts apps/dashboard-react/tests \
+        docs/spec/use-cases/UC-002-observe-oee.md \
+        docs/spec/use-cases/UC-001-monitor-line-state.md \
+        docs/spec/USE-CASES.md
+git commit -m "test(e2e): Playwright UC-001/UC-002 + promote UCs to implemented"
 ```
 
 ---
@@ -4254,13 +4339,13 @@ git commit -m "test(e2e): Playwright UC-001/UC-002 + use-case coverage CI gate"
 ### Task 25: ADRs 5–8, 10–12 (Phase 1 set)
 
 **Files:**
-- Create: `docs/adr/0005-contract-first-llm-drift.md`
-- Create: `docs/adr/0006-test-speed-tiering.md`
-- Create: `docs/adr/0007-e2e-as-qa-coverage-gate.md`
-- Create: `docs/adr/0008-domain-modeling-evolution.md`
-- Create: `docs/adr/0010-architectural-fitness-tooling.md`
-- Create: `docs/adr/0011-sparkplug-namespace.md`
-- Create: `docs/adr/0012-oee-iso22400.md`
+- Create: `docs/ADR/0005-contract-first-llm-drift.md`
+- Create: `docs/ADR/0006-test-speed-tiering.md`
+- Create: `docs/ADR/0007-e2e-as-qa-coverage-gate.md`
+- Create: `docs/ADR/0008-domain-modeling-evolution.md`
+- Create: `docs/ADR/0010-architectural-fitness-tooling.md`
+- Create: `docs/ADR/0011-sparkplug-namespace.md`
+- Create: `docs/ADR/0012-oee-iso22400.md`
 
 > ADR-9 is deferred to Phase 2 per the design spec §12 roadmap.
 
@@ -4295,7 +4380,7 @@ Source: spec §15. Define A, P, Q, OEE; reference ISO 22400-2:2014 §5; explain 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add docs/adr/0005-* docs/adr/0006-* docs/adr/0007-* docs/adr/0008-* docs/adr/0010-* docs/adr/0011-* docs/adr/0012-*
+git add docs/ADR/0005-* docs/ADR/0006-* docs/ADR/0007-* docs/ADR/0008-* docs/ADR/0010-* docs/ADR/0011-* docs/ADR/0012-*
 git commit -m "docs(adr): 0005-0008, 0010-0012 (Phase 1 ADR set)"
 ```
 
@@ -4482,7 +4567,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ./scripts/check-use-case-coverage.sh
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: uv run scripts/check-use-case-coverage.py
 
   e2e-real:
     runs-on: ubuntu-latest
@@ -4562,9 +4650,9 @@ repos:
 
       - id: use-case-coverage
         name: use-case coverage
-        entry: ./scripts/check-use-case-coverage.sh
+        entry: uv run scripts/check-use-case-coverage.py
         language: system
-        files: ^(docs/USE-CASES\.md|apps/dashboard-react/tests/e2e/)
+        files: ^(docs/spec/(USE-CASES\.md|use-cases/)|apps/dashboard-react/tests/e2e/)
         pass_filenames: false
 ```
 
@@ -4744,7 +4832,7 @@ Show C4 context diagram (or README ASCII flow). Call out three guardrails:
 3. *Use-case coverage gate* — every entry in `USE-CASES.md` has exactly one Playwright spec; CI counts them.
 
 ## Beat 3 (1:30–3:00) — One concrete decision
-Open `docs/adr/0002-timescaledb-over-influxdb.md`. Narrate: "InfluxDB has 4× the market share. I chose TimescaleDB anyway, and the ADR cites the evidence on both sides plus a migration path. This is the JD's 'tradeoff + migration strategy' requirement, shown not told."
+Open `docs/ADR/0002-timescaledb-over-influxdb.md`. Narrate: "InfluxDB has 4× the market share. I chose TimescaleDB anyway, and the ADR cites the evidence on both sides plus a migration path. This is the JD's 'tradeoff + migration strategy' requirement, shown not told."
 
 ## Beat 4 (3:00–4:00) — One concrete LLM workflow
 Open `docs/AI-WORKFLOW/case-01.md`. Narrate the OEE absorption: read the standard first, generate property-based tests via LLM, *guardrails caught the hallucinated "Setup Time" factor and the unconstrained Hypothesis strategy*. This is "knowing when to trust AI output".
@@ -4775,7 +4863,7 @@ cd /Users/cdlee/personal/sdf-dx
 # Contracts gate
 (cd packages/contracts && make all && git diff --exit-code codegen/)
 # Use-case gate
-./scripts/check-use-case-coverage.sh
+uv run scripts/check-use-case-coverage.py
 # Python
 (cd apps/api-python && ruff check . && mypy && lint-imports && pytest --integration)
 (cd apps/ingest-python && ruff check . && mypy && lint-imports && pytest --integration)
@@ -4800,7 +4888,7 @@ git log --oneline | head -30
 - [ ] **Step 3: Update README "Phase 1 status" line**
 
 ```markdown
-> **Phase 1 status:** complete (tag `phase-1`). See `docs/superpowers/plans/2026-05-22-phase-1-single-factory-vertical-slice.md` for the build log.
+> **Phase 1 status:** complete (tag `phase-1`). See `docs/plans/2026-05-22-phase-1-single-factory-vertical-slice.md` for the build log.
 ```
 
 - [ ] **Step 4: Commit + push tag (only when user explicitly approves push)**
@@ -4821,8 +4909,8 @@ After every task above is checked off:
 - [ ] 1 virtual factory + 1 line + 5 machines simulated; Sparkplug B NBIRTH/NDATA/NDEATH visible on the broker.
 - [ ] OEE/A/P/Q on the dashboard; line state changes propagate in under 1 second via WebSocket.
 - [ ] ADRs 0001–0008 and 0010–0012 present.
-- [ ] `docs/KNOWN-UNKNOWNS.md`, `docs/DOMAIN-NOTES.md`, `docs/USE-CASES.md`, `docs/AI-WORKFLOW/case-01.md` written.
-- [ ] USE-CASES.md and Playwright specs are 1:1 (coverage gate green).
+- [ ] `docs/KNOWN-UNKNOWNS.md`, `docs/DOMAIN-NOTES.md`, `docs/AI-WORKFLOW/case-01.md` written; `docs/spec/USE-CASES.md` lists UC-001 + UC-002 with `status: implemented`.
+- [ ] Use-case coverage gate green (`uv run scripts/check-use-case-coverage.py`): registry rows ↔ per-UC files ↔ E2E specs consistent for all `implemented` UCs.
 - [ ] CI green: ruff + mypy strict + import-linter + tseslint strict + tsc strict + detekt + ktlint + Konsist + contract codegen drift gate + use-case gate.
 - [ ] `apps/api-python/tests/contexts/*/domain/` and `apps/ingest-python/tests/domain/` contain zero mock/stub/fake imports; whole suite under 1 second.
 - [ ] At least one Hypothesis property-based test on OEE.
@@ -4878,7 +4966,7 @@ After every task above is checked off:
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-05-22-phase-1-single-factory-vertical-slice.md`. Two execution options:
+Plan complete and saved to `docs/plans/2026-05-22-phase-1-single-factory-vertical-slice.md`. Two execution options:
 
 1. **Subagent-Driven (recommended)** — fresh subagent per task, review between tasks, fast iteration. Uses `superpowers:subagent-driven-development`.
 
@@ -4890,7 +4978,7 @@ Which approach?
 
 ## Follow-up plans (out of scope here — file separately when ready)
 
-- `docs/superpowers/plans/<date>-phase-2-multi-tenancy.md` — schema-per-tenant onboarding, JWT, i18n, tenancy/identity BCs, ADR-0009.
-- `docs/superpowers/plans/<date>-phase-3-production-readiness.md` — Prometheus, OTel, k6 budgets, k8s manifests, Avro consideration, ADR-0013/0014.
-- `docs/superpowers/plans/<date>-phase-4-extension-point.md` — quality or maintenance BC, ADR-0015.
-- `docs/superpowers/plans/<date>-phase-5-live-demo-prep.md` — Scenario C/B/E scripts, rehearsals, video backups, 1-pager.
+- `docs/plans/<date>-phase-2-multi-tenancy.md` — schema-per-tenant onboarding, JWT, i18n, tenancy/identity BCs, ADR-0009.
+- `docs/plans/<date>-phase-3-production-readiness.md` — Prometheus, OTel, k6 budgets, k8s manifests, Avro consideration, ADR-0013/0014.
+- `docs/plans/<date>-phase-4-extension-point.md` — quality or maintenance BC, ADR-0015.
+- `docs/plans/<date>-phase-5-live-demo-prep.md` — Scenario C/B/E scripts, rehearsals, video backups, 1-pager.
