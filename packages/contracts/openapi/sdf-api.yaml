@@ -1,0 +1,92 @@
+openapi: 3.1.0
+info:
+  title: SDF Manufacturing DX API
+  version: 0.1.0
+  description: Phase 1 read-mostly REST surface for the dashboard. Multi-tenant fields omitted; default factory is implicit.
+servers:
+  - url: http://localhost:8000
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe
+      responses:
+        "200": { description: ok }
+  /readyz:
+    get:
+      summary: Readiness probe (DB + Kafka)
+      responses:
+        "200": { description: ready }
+        "503": { description: not ready }
+  /api/v1/lines:
+    get:
+      summary: List production lines for the default factory
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProductionLine" }
+  /api/v1/lines/{lineId}/state:
+    get:
+      summary: Current line state (latest)
+      parameters:
+        - in: path
+          name: lineId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LineStateSnapshot" }
+  /api/v1/lines/{lineId}/oee:
+    get:
+      summary: OEE for a line over a window
+      parameters:
+        - in: path
+          name: lineId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: window
+          schema:
+            type: string
+            enum: [5m, 1h, shift]
+            default: 5m
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OeeReading" }
+components:
+  schemas:
+    ProductionLine:
+      type: object
+      required: [id, name, factoryId, isa95Role]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        factoryId: { type: string, format: uuid }
+        isa95Role: { type: string, enum: [WORK_CENTER, WORK_UNIT, PRODUCTION_LINE] }
+    LineStateSnapshot:
+      type: object
+      required: [lineId, state, since]
+      properties:
+        lineId: { type: string, format: uuid }
+        state: { type: string, enum: [RUNNING, IDLE, DOWN, CHANGEOVER] }
+        since: { type: string, format: date-time }
+    OeeReading:
+      type: object
+      required: [lineId, window, oee, availability, performance, quality, observedAt]
+      properties:
+        lineId: { type: string, format: uuid }
+        window: { type: string, enum: [5m, 1h, shift] }
+        oee: { type: number, minimum: 0, maximum: 1 }
+        availability: { type: number, minimum: 0, maximum: 1 }
+        performance: { type: number, minimum: 0, maximum: 1 }
+        quality: { type: number, minimum: 0, maximum: 1 }
+        observedAt: { type: string, format: date-time }

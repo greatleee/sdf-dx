@@ -1,0 +1,8 @@
+extends: ["spectral:oas"]
+rules:
+  # Phase 1 conventions; tighten in Phase 2 when surface grows.
+  operation-operationId: warn
+  operation-tag-defined: off
+  info-contact: off
+  info-license: off
+  oas3-unused-component: warn
