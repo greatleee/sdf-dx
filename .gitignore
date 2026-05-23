@@ -33,5 +33,6 @@ build/
 *.iml
 
 # Docker
+.env
 .env.local
 .env.*.local
