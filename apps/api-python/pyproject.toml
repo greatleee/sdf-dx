@@ -72,20 +72,44 @@ markers = [
   "integration: testcontainers-backed; opt-in via --integration",
 ]
 
+# Architectural enforcement — single source of truth is ADR-0023.
+# Only the contracts whose source modules exist as of Section D (domain) are
+# active here; adapters/use-case/composition contracts (ADR-0023 #4, #6, #7)
+# land in Section E when those modules first appear. Do NOT relax a contract to
+# make code pass — fix the code (rules §12).
 [tool.importlinter]
 root_package = "sdf_api"
+# Required because the forbidden contracts below name external packages
+# (pydantic, sqlalchemy, …) — import-linter must graph them to ban their import.
+include_external_packages = true
 
+# ADR-0023 #1 — domain-no-system-reads (call-site reads of random/uuid/clock are
+# additionally caught by tests/architecture/test_call_sites.py, AST checks A1/A2).
 [[tool.importlinter.contracts]]
-name = "domain must not depend on adapters or external infra"
+name = "domain-no-system-reads"
 type = "forbidden"
-source_modules = ["sdf_api.contexts.*.domain"]
+source_modules = ["sdf_api.contexts.*.domain", "sdf_api.shared_kernel"]
+forbidden_modules = ["random", "secrets"]
+
+# ADR-0023 #2 — domain-no-validation-libs (ADR-0004 + ADR-0018).
+[[tool.importlinter.contracts]]
+name = "domain-no-validation-libs"
+type = "forbidden"
+source_modules = ["sdf_api.contexts.*.domain", "sdf_api.shared_kernel"]
+forbidden_modules = ["pydantic", "marshmallow", "attrs", "returns", "arrow"]
+
+# ADR-0023 #3 — domain-no-infrastructure (ADR-0004).
+[[tool.importlinter.contracts]]
+name = "domain-no-infrastructure"
+type = "forbidden"
+source_modules = ["sdf_api.contexts.*.domain", "sdf_api.shared_kernel"]
 forbidden_modules = [
-  "sdf_api.contexts.*.adapters",
-  "sqlalchemy", "asyncpg", "aiokafka", "httpx", "fastapi", "redis",
+  "sqlalchemy", "asyncpg", "aiokafka", "httpx", "fastapi", "redis", "pymemcache",
 ]
 
+# ADR-0023 #5 — bc-independence (Phase 1: the only BC-level rule in force, ADR-0008).
 [[tool.importlinter.contracts]]
-name = "BCs may not import each other directly (shared_kernel only)"
+name = "bc-independence"
 type = "independence"
 modules = [
   "sdf_api.contexts.monitoring",

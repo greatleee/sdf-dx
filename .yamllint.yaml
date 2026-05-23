@@ -1,0 +1,19 @@
+---
+# yamllint configuration. Tames yamllint's strict defaults (80-col, mandatory
+# "---", zero brace padding, on/off booleans) that don't fit hand-written config
+# and OpenAPI files. Honored by local `yamllint` and by CodeRabbit's yamllint
+# tool (enabled in .coderabbit.yaml; CodeRabbit loads .yamllint.yaml if present).
+extends: default
+
+rules:
+  line-length:
+    max: 160                       # OpenAPI SoT descriptions run long; don't reflow them
+    allow-non-breakable-words: true
+  document-start: disable          # config/compose files need no "---"
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']  # spectral uses `rule: off`
+    check-keys: false              # allow GitHub Actions `on:` mapping key
+  braces:
+    max-spaces-inside: 1           # permit `{ enabled: true }`-style flow mappings
+  comments:
+    min-spaces-from-content: 1
