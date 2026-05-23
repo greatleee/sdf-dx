@@ -44,7 +44,7 @@ A-OP has the dashboard open.
 | 2 | S-API → S-DB | (read of `line_oee_5m`) | — |
 
 ## Invariants
-- All four returned ratios lie in `[0, 1]`.
+- All four returned ratios lie in `[0, 1]` *under Phase 1 calibration*. Availability and Quality are bounded by construction; `Performance` (ISO 22400-2 *Effectiveness*) can exceed 1 if the ideal cycle time is set loose — see Open questions and `KNOWN-UNKNOWNS.md`.
 - `OEE = Availability × Performance × Quality` within floating-point tolerance (`≤ 1e-9` absolute).
 - Phase 1 simplification: `Availability` is approximated as `1.0` (CAGG bucket treated as planned-busy-time). See ADR-0012 and `KNOWN-UNKNOWNS.md`.
 
@@ -72,3 +72,4 @@ Feature: Operator observes OEE refresh
 
 ## Open questions
 - The "refresh at polling cadence" scenario depends on simulator activity within the test window; making it deterministic in CI requires either time-mocking or seeded simulator output. Resolve at E2E implementation time; second Gherkin scenario is currently *deferred* (covered only in `fake` mode where MSW returns fresh handlers).
+- The `[0,1]` invariant assumes `Performance` ≤ 1, which is not guaranteed by ISO 22400-2 (*Effectiveness* can exceed 100% with a loose ideal cycle time). Holds under Phase 1 simulator calibration; revisit before sourcing real ideal-cycle-time data. Tracked in `KNOWN-UNKNOWNS.md`.

@@ -16,6 +16,7 @@ This document is a working acknowledgement of what this portfolio **does not** c
 
 ## Phase 1 limitations to be addressed later
 - OEE Availability assumes bucket == planned-busy-time (Phase 3 introduces shift schedules).
+- OEE `Performance` (ISO 22400-2 *Effectiveness*) can mathematically exceed 1 when the ideal cycle time is set looser than actual throughput. The UC-002 invariant "all four ratios ∈ [0,1]" therefore holds only under the Phase 1 simulator's calibrated cycle times, not for arbitrary real telemetry. Revisit when real ideal-cycle-time sourcing lands.
 - Only 5-minute OEE continuous aggregate is implemented (1h and shift in Phase 3).
 - Single implicit tenant — multi-tenancy is Phase 2.
 - No authn/authz — JWT lands in Phase 2.
