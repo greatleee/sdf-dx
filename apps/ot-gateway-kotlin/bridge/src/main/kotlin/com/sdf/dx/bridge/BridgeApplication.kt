@@ -29,6 +29,12 @@ public open class BridgeApplication {
 
             val producer = KafkaBridgeProducer(kafkaBootstrap)
             val subscriber = MqttSubscriber(mqttUrl, tenant) { producer.emit(it) }
+            Runtime.getRuntime().addShutdownHook(
+                Thread {
+                    subscriber.close()
+                    producer.close()
+                },
+            )
             subscriber.start()
         }
 }

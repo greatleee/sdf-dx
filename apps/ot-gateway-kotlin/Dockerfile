@@ -17,6 +17,11 @@ WORKDIR /app
 COPY --from=build /src/simulator/build/install/simulator /app/simulator
 # bridge: Spring Boot fat jar (stable name set in bridge/build.gradle.kts)
 COPY --from=build /src/bridge/build/libs/bridge.jar /app/bridge.jar
+# Drop root: run both services as an unprivileged user. installDist preserves the
+# +x bit on bin/simulator, and chown keeps it readable/executable for appuser.
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && chown -R appuser:appuser /app
+USER appuser
 # Default entrypoint is the bridge; docker-compose overrides `command:` per service:
 #   simulator -> ["/app/simulator/bin/simulator"]
 #   bridge    -> ["java","-jar","/app/bridge.jar"]

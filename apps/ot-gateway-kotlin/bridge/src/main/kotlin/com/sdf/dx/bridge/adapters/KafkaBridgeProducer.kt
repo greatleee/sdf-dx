@@ -6,6 +6,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
+import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.Properties
 
@@ -41,6 +42,7 @@ internal fun telemetryPayload(record: NormalizedRecord): LinkedHashMap<String, A
  * imports live here in the adapter, never in the domain (backend-code-architecture §2).
  */
 public class KafkaBridgeProducer(bootstrap: String) {
+    private val log = LoggerFactory.getLogger(KafkaBridgeProducer::class.java)
     private val mapper = ObjectMapper()
     private val producer: KafkaProducer<String, String> =
         KafkaProducer(
@@ -61,7 +63,11 @@ public class KafkaBridgeProducer(bootstrap: String) {
         val topic = "sdf.${record.tenantId}.machine.telemetry"
         val key = "${record.lineId}/${record.machineKey}"
         val value = mapper.writeValueAsString(telemetryPayload(record))
-        producer.send(ProducerRecord(topic, key, value))
+        producer.send(ProducerRecord(topic, key, value)) { _, ex ->
+            if (ex != null) {
+                log.warn("Kafka delivery failed for topic={} key={}", topic, key, ex)
+            }
+        }
     }
 
     /** Flushes and closes the underlying producer. */

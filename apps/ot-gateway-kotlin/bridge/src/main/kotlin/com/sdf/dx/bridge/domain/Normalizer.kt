@@ -40,7 +40,7 @@ public data class NormalizedRecord(
  */
 public object Normalizer {
     /**
-     * Splits each compound metric name on `/` (limit 2) into `(machineKey, metric)`,
+     * Splits each compound metric name on its single `/` into `(machineKey, metric)`,
      * coerces the value to a [Double] (`Number` → [Number.toDouble], `Boolean` →
      * 1.0/0.0), and emits one [NormalizedRecord] per coercible compound metric.
      * Names without exactly two `/`-separated parts and values that are neither
@@ -54,7 +54,7 @@ public object Normalizer {
         sparkplugSeq: Int,
     ): List<NormalizedRecord> =
         metrics.mapNotNull { metric ->
-            val parts = metric.name.split("/", limit = 2)
+            val parts = metric.name.split("/")
             if (parts.size != 2) {
                 return@mapNotNull null
             }

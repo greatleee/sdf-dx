@@ -22,8 +22,13 @@ public data class LineModel(
 ) {
     /**
      * Advances production by `elapsedMs / CYCLE_TIME_MS` cycles. Each cycle draws
-     * from [rng]: a draw below [scrapRate] is scrap, otherwise good. Returns the
-     * updated copy; the receiver is left unchanged.
+     * from [rng]: a draw below [scrapRate] is scrap, otherwise good. Returns an
+     * updated copy with the new counts.
+     *
+     * Note: the injected [rng] is `kotlin.random.Random`, which is mutable; the
+     * returned copy shares the same [rng] instance, so drawing here also advances
+     * the receiver's RNG state. Callers drive the model forward by using only the
+     * returned value and discarding the receiver (see the composition root).
      */
     public fun tick(elapsedMs: Long): LineModel {
         val cycles = elapsedMs / CYCLE_TIME_MS
@@ -32,12 +37,14 @@ public data class LineModel(
         }
         var good = goodCount
         var scrap = scrapCount
-        repeat(cycles.toInt()) {
+        var remaining = cycles
+        while (remaining > 0L) {
             if (rng.nextDouble() < scrapRate) {
                 scrap += 1
             } else {
                 good += 1
             }
+            remaining -= 1L
         }
         return copy(
             cycleCount = cycleCount + cycles,
