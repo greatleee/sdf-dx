@@ -4,19 +4,25 @@ PYTHON_OUT := codegen/python
 KOTLIN_OUT := codegen/kotlin
 TS_OUT := codegen/typescript
 
+# codegen/python is grouped by contract family (mirrors the SoT folders
+# sparkplug/ openapi/ kafka-payloads/) so the three families never mix.
+PY_SPARKPLUG := $(PYTHON_OUT)/sparkplug
+PY_OPENAPI := $(PYTHON_OUT)/openapi
+PY_KAFKA := $(PYTHON_OUT)/kafka
+
 python:
-	mkdir -p $(PYTHON_OUT)
-	protoc --proto_path=sparkplug --python_out=$(PYTHON_OUT) sparkplug/sparkplug_b.proto
+	mkdir -p $(PY_SPARKPLUG)
+	protoc --proto_path=sparkplug --python_out=$(PY_SPARKPLUG) sparkplug/sparkplug_b.proto
 
 kotlin:
 	mkdir -p $(KOTLIN_OUT)
 	protoc --proto_path=sparkplug --kotlin_out=$(KOTLIN_OUT) --java_out=$(KOTLIN_OUT) sparkplug/sparkplug_b.proto
 
 openapi-python:
-	mkdir -p $(PYTHON_OUT)
+	mkdir -p $(PY_OPENAPI)
 	uvx --from datamodel-code-generator==0.45.0 datamodel-codegen \
 	  --input openapi/sdf-api.yaml --input-file-type openapi \
-	  --output $(PYTHON_OUT)/sdf_openapi_models.py \
+	  --output $(PY_OPENAPI)/sdf_openapi_models.py \
 	  --output-model-type pydantic_v2.BaseModel \
 	  --target-python-version 3.12 \
 	  --use-standard-collections --use-union-operator \
@@ -27,22 +33,21 @@ openapi-typescript:
 	pnpm dlx openapi-typescript@7.13.0 openapi/sdf-api.yaml \
 	  -o $(TS_OUT)/sdf-openapi-client.ts
 
-# One flat module per payload schema. datamodel-codegen rejects a single-file
+# One module per payload schema. datamodel-codegen rejects a single-file
 # --output for a directory input ("modular references require an output
-# directory"), so each *.schema.json is generated independently — this also
-# keeps codegen/python flat and honors the rule's file-per-payload layout.
+# directory"), so each *.schema.json is generated independently into kafka/.
 kafka-python:
-	mkdir -p $(PYTHON_OUT)
+	mkdir -p $(PY_KAFKA)
 	uvx --from datamodel-code-generator==0.45.0 datamodel-codegen \
 	  --input kafka-payloads/machine_telemetry.schema.json --input-file-type jsonschema \
-	  --output $(PYTHON_OUT)/machine_telemetry.py \
+	  --output $(PY_KAFKA)/machine_telemetry.py \
 	  --output-model-type pydantic_v2.BaseModel \
 	  --target-python-version 3.12 \
 	  --use-standard-collections --use-union-operator \
 	  --disable-timestamp
 	uvx --from datamodel-code-generator==0.45.0 datamodel-codegen \
 	  --input kafka-payloads/line_state.schema.json --input-file-type jsonschema \
-	  --output $(PYTHON_OUT)/line_state.py \
+	  --output $(PY_KAFKA)/line_state.py \
 	  --output-model-type pydantic_v2.BaseModel \
 	  --target-python-version 3.12 \
 	  --use-standard-collections --use-union-operator \
