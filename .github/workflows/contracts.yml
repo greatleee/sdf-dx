@@ -1,0 +1,74 @@
+name: contracts
+on:
+  pull_request:
+    paths:
+      - "packages/contracts/**"
+      - ".github/workflows/contracts.yml"
+  push:
+    branches: [main]
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    env:
+      # Must match the protoc used to generate the committed stubs (libprotoc
+      # 29.3). apt's protobuf-compiler is far older and would make the drift
+      # gate fail on every run — pin it (ADR-0005 D-3 #2).
+      PROTOC_VERSION: "29.3"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for oasdiff against origin/main
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Install pinned protoc
+        run: |
+          curl -sSLo /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          unzip -o /tmp/protoc.zip -d "$HOME/.protoc"
+          echo "$HOME/.protoc/bin" >> "$GITHUB_PATH"
+      - name: Install uv
+        run: pip install uv
+
+      - name: Verify protoc version
+        run: protoc --version  # expect: libprotoc 29.3
+
+      - name: Lint OpenAPI spec (spectral, quality gate)
+        working-directory: packages/contracts
+        run: make lint
+
+      - name: Regenerate all contracts
+        working-directory: packages/contracts
+        run: make all
+
+      - name: Fail if generated files diverged (drift gate)
+        working-directory: packages/contracts
+        run: |
+          if ! git diff --exit-code codegen/; then
+            echo "::error::Codegen drift — run 'make all' in packages/contracts and commit"
+            exit 1
+          fi
+
+      - name: Set up Go (for oasdiff)
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-go@v5
+        with: { go-version: "1.23" }
+
+      - name: Breaking-change check (oasdiff, advisory)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          # Pinned for reproducibility (matches the determinism stance of the
+          # generators); a failed install must be loud, not a silent no-op gate.
+          go install github.com/tufin/oasdiff@v1.15.3 || \
+            { echo "::warning::oasdiff install failed — breaking-change gate skipped"; exit 0; }
+          git fetch origin ${{ github.base_ref }} --depth=1
+          git show origin/${{ github.base_ref }}:packages/contracts/openapi/sdf-api.yaml > /tmp/base-sdf-api.yaml || \
+            { echo "::notice::No baseline spec on ${{ github.base_ref }} — skipping breaking-change check" ; exit 0 ; }
+          oasdiff breaking /tmp/base-sdf-api.yaml packages/contracts/openapi/sdf-api.yaml \
+            --fail-on ERR --format githubactions || \
+            echo "::warning::OpenAPI breaking change detected (advisory in Phase 1; promoted to blocking in Phase 2)"
