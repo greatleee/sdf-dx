@@ -1,10 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import { MonitoringAdaptersProvider, createMonitoringAdapters } from "@/contexts/monitoring";
+
 import App from "./App";
 import "./index.css";
 
 const queryClient = new QueryClient();
+const adapters = createMonitoringAdapters();
 
 async function bootstrap(): Promise<void> {
   if (import.meta.env.VITE_FAKE === "1") {
@@ -16,7 +20,9 @@ async function bootstrap(): Promise<void> {
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <MonitoringAdaptersProvider adapters={adapters}>
+          <App />
+        </MonitoringAdaptersProvider>
       </QueryClientProvider>
     </React.StrictMode>,
   );

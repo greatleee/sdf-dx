@@ -64,6 +64,10 @@ export default tseslint.config(
           ],
         },
       ],
+      // NOTE: @sdf/contracts is adapters-only (§3, ADR-0028) but it is a *workspace* package that
+      // resolves to local source, so eslint-plugin-boundaries treats it as internal — boundaries/
+      // external is a no-op for it. The ban is enforced by specifier instead, via
+      // @typescript-eslint/no-restricted-imports in each non-adapter layer block below.
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/consistent-type-imports": "error",
@@ -82,9 +86,18 @@ export default tseslint.config(
         "error",
         {
           allow: [
-            // Architecture layer entry points
+            // Architecture layer entry points (how external code enters a bounded context):
+            // the BC barrel (`@/contexts/<bc>`) for hooks/providers, or `ports/*` for types.
+            "@/contexts/*",
             "@/contexts/*/index.ts",
             "@/contexts/*/ports/*",
+            // Intra-context cross-layer imports (e.g. adapters → ../ports, application →
+            // ../domain, the BC barrel → ./adapters). This permits only the import *shape*;
+            // dependency *direction* is still enforced by eslint-plugin-boundaries above.
+            "**/domain/*",
+            "**/ports/*",
+            "**/application/*",
+            "**/adapters/*",
             // UI layer components (imports resolved from src/ui/)
             "@/ui/**",
             // Internal testing helpers
@@ -92,6 +105,8 @@ export default tseslint.config(
             // Well-known package sub-paths
             "react-dom/client",
             "msw/browser",
+            "msw/node",
+            "@sdf/contracts/zod",
           ],
         },
       ],
@@ -161,6 +176,13 @@ export default tseslint.config(
             { name: "zustand", message: "Domain: store belongs in app/ shell (§12)." },
             { name: "@tanstack/react-router", message: "Domain: router belongs in app/ (§12)." },
           ],
+          patterns: [
+            {
+              group: ["@sdf/contracts", "@sdf/contracts/*"],
+              message:
+                "Domain: generated contract schemas are boundary-only — @sdf/contracts is adapters-only (§3, ADR-0028).",
+            },
+          ],
         },
       ],
     },
@@ -179,6 +201,32 @@ export default tseslint.config(
             {
               regex: ".*/adapters/.*",
               message: "application/ must not import adapters directly — wire via ports (§1, §4).",
+            },
+            {
+              group: ["@sdf/contracts", "@sdf/contracts/*"],
+              message:
+                "application/ must not import generated contract schemas — @sdf/contracts is adapters-only (§3, ADR-0028).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ports + ui complete the adapters-only ban on @sdf/contracts (§3, ADR-0028); neither has its
+  // own no-restricted-imports block, so this adds one (domain/shared + application carry it inline).
+  {
+    files: ["src/contexts/*/ports/**/*.{ts,tsx}", "src/ui/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": "off",
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@sdf/contracts", "@sdf/contracts/*"],
+              message:
+                "Generated contract schemas are boundary-only — @sdf/contracts is adapters-only (§3, ADR-0028).",
             },
           ],
         },

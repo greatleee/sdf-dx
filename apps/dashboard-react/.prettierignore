@@ -3,3 +3,7 @@ node_modules
 coverage
 pnpm-lock.yaml
 *.gen.ts
+# MSW-generated service worker (vendor script, committed as-is)
+public/mockServiceWorker.js
+# OMC runtime state (gitignored)
+.omc

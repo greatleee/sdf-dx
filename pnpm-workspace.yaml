@@ -1,3 +1,4 @@
 packages:
   - "apps/dashboard-react"
   - "packages/contracts"
+  - "packages/contracts/codegen/typescript"
