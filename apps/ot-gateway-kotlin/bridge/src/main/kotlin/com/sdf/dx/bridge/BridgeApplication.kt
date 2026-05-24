@@ -28,7 +28,7 @@ public open class BridgeApplication {
             val tenant = System.getenv("SDF_DEFAULT_TENANT") ?: "sdf_default"
 
             val producer = KafkaBridgeProducer(kafkaBootstrap)
-            val subscriber = MqttSubscriber(mqttUrl, tenant) { producer.emit(it) }
+            val subscriber = MqttSubscriber(mqttUrl, tenant) { record -> producer.emit(record) }
             Runtime.getRuntime().addShutdownHook(
                 Thread {
                     subscriber.close()

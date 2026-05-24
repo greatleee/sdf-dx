@@ -3,11 +3,91 @@ complexity:
     threshold: 12
   LongMethod:
     threshold: 60
+  # Make the structural limits explicit rather than inheriting detekt's defaults, so the
+  # ceiling is reviewable in one place. Sensible, not over-tightened.
+  NestedBlockDepth:
+    threshold: 4
+  LongParameterList:
+    functionThreshold: 6
+    constructorThreshold: 7
+  # TooManyFunctions left at the buildUponDefaultConfig default — no module is near it.
 style:
   MaxLineLength:
     maxLineLength: 120
+  # Ban scope-shedding markers. LLM sessions love to leave a TODO instead of finishing the
+  # work; this fails the build on `TODO:` / `FIXME:` / `STOPSHIP:` so scope can't quietly leak.
+  # (ForbiddenComment is a `style` rule in detekt, not a `comments` rule.)
+  ForbiddenComment:
+    active: true
+    comments:
+      - reason: 'Do the work now — a TODO marker silently sheds scope (lint rule, not a suggestion).'
+        value: 'TODO:'
+      - reason: 'Fix the problem now rather than leaving a FIXME marker.'
+        value: 'FIXME:'
+      - reason: 'Address before shipping — STOPSHIP markers must not reach a commit.'
+        value: 'STOPSHIP:'
   ReturnCount:
     max: 3
+  # Pair with ReturnCount: cap distinct throw sites per function so a core function can't grow a
+  # sprawl of exception exits instead of returning a sum-type value. (ThrowsCount is a `style`
+  # rule in detekt — default max is already 2; kept explicit to document intent.)
+  ThrowsCount:
+    max: 2
+  # Suppression discipline: the architecture-critical rules below may NOT be silenced with
+  # @Suppress — the repo rule is "fix the code, never suppress to pass". Known detekt
+  # limitation: ForbiddenSuppress cannot forbid suppressing *itself* (a `@Suppress("ForbiddenSuppress")`
+  # slips through); that gap is accepted and called out here so a reviewer knows to watch for it.
+  ForbiddenSuppress:
+    active: true
+    rules:
+      - 'CyclomaticComplexMethod'
+      - 'LongMethod'
+      - 'ReturnCount'
+      - 'ForbiddenImport'
+      - 'ForbiddenMethodCall'
+      - 'MagicNumber'
+      - 'ThrowsCount'
+  # Domain-purity defense-in-depth (Option 2): mirror the Konsist K2 forbidden-import set at
+  # lint level, scoped to the functional core via per-rule `includes`. ForbiddenImport works on
+  # import declarations (no type resolution required), so the plain `detekt` task catches it.
+  ForbiddenImport:
+    active: true
+    includes: ['**/domain/**']
+    imports:
+      - value: 'org.apache.kafka.**'
+        reason: 'Messaging framework belongs in adapters, never the domain (K2 / backend-arch §2).'
+      - value: 'org.springframework.**'
+        reason: 'Spring belongs in adapters / composition root, never the domain (K2 / backend-arch §2).'
+      - value: 'org.eclipse.paho.**'
+        reason: 'MQTT client belongs in adapters, never the domain (K2 / backend-arch §2).'
+      - value: 'org.eclipse.tahu.**'
+        reason: 'Sparkplug/Tahu types belong in adapters, never the domain (K2 / backend-arch §2).'
+      - value: 'com.fasterxml.jackson.**'
+        reason: 'JSON serialization belongs in adapters, never the domain (K2 / backend-arch §2).'
+  # Mirror the Konsist K1 system-read set (clock / UUID / console) at lint level,
+  # (randomness is enforced by injection — there is no global un-seeded RNG call to ban here),
+  # scoped to the domain. IMPORTANT: ForbiddenMethodCall REQUIRES detekt type resolution — it
+  # is a no-op under the plain `detekt` task and only runs under `detektMain` / `detektTest`
+  # (the source-set tasks the detekt Gradle plugin wires with a Kotlin classpath). CI must invoke
+  # those tasks for this rule to bite — see .github/workflows/ci.yml kotlin job.
+  # Scoped to `**/domain/**` on purpose: adapters and composition roots legitimately read the
+  # system clock (MqttSubscriber, simulator Main), so a project-wide ban would be wrong here.
+  ForbiddenMethodCall:
+    active: true
+    includes: ['**/domain/**']
+    methods:
+      - value: 'java.time.Instant.now'
+        reason: 'Inject the clock; the domain must not read the system clock (K1 / backend-arch §4).'
+      - value: 'java.util.UUID.randomUUID'
+        reason: 'Inject IDs; the domain must not read randomness (K1 / backend-arch §4).'
+      - value: 'java.lang.System.currentTimeMillis'
+        reason: 'Inject the clock; the domain must not read the system clock (K1 / backend-arch §4).'
+      - value: 'java.lang.System.nanoTime'
+        reason: 'Inject the clock; the domain must not read the system clock (K1 / backend-arch §4).'
+      - value: 'kotlin.io.println'
+        reason: 'Use a logger in an adapter; the domain must not perform IO (backend-arch §2).'
+      - value: 'kotlin.io.print'
+        reason: 'Use a logger in an adapter; the domain must not perform IO (backend-arch §2).'
 naming:
   FunctionNaming:
     active: true
