@@ -53,6 +53,8 @@ export default tseslint.config(
             { from: "domain", disallow: ["adapters", "application", "ui", "ports"] },
             // ports define contracts over domain; must not depend upward (§1)
             { from: "ports", disallow: ["adapters", "application", "ui"] },
+            // adapters implement ports/domain/shared; must not reach up into application or ui (§1)
+            { from: "adapters", disallow: ["application", "ui"] },
             // shared = cross-cutting pure values; domain-purity applies (§2)
             { from: "shared", disallow: ["adapters", "application", "ui", "ports", "domain"] },
             // application must go through ports interfaces, never directly to adapters or ui (§1/§4)
@@ -116,7 +118,8 @@ export default tseslint.config(
           message: "Domain: inject RandomPort — no Math.random() (§2).",
         },
         {
-          selector: "CallExpression[callee.property.name='randomUUID']",
+          selector:
+            "CallExpression[callee.object.name='crypto'][callee.property.name='randomUUID']",
           message: "Domain: inject UUIDPort — no crypto.randomUUID() (§2).",
         },
         {
