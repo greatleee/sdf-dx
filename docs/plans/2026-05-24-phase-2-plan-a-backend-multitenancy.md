@@ -199,7 +199,7 @@ Next free number is **0033** (existing run 0000–0032; **0028–0032 are the fr
 - Auth: `POST /auth/login` (credentials → token whose claims include `sub` + active tenant + that tenant's role); tenant-switch surface re-issuing a token with a different active-tenant claim. **Active tenant = token claim; existing monitoring routes keep signatures (additive).**
 - Tenancy: `POST /tenants` (tenant-admin only), `GET /tenants` (caller's member tenants).
 - Cross-tenant: `GET /enterprise/oee`.
-- Schemas: `LoginRequest`, `TokenResponse`, `TenantCreateRequest`, `TenantSummary`, `EnterpriseOee`, error envelopes.
+- Schemas: `LoginRequest`, `TokenResponse`, `TenantCreateRequest`, `TenantSummary`, `EnterpriseOEE` (glossary-canonical acronym casing, matching the verbatim-identifier AC above; if `datamodel-codegen` cannot preserve the acronym, record a glossary alias at W1-CONTRACTS rather than diverging silently), error envelopes.
 - `machine_telemetry.schema.json`: **unchanged** (machineKey free string).
 **Acceptance Criteria / tests:**
 - [ ] `spectral lint` passes (pre-codegen).
@@ -214,7 +214,7 @@ Next free number is **0033** (existing run 0000–0032; **0028–0032 are the fr
 **Scaffolding:**
 - `src/sdf_api/composition.py` — extract DI wiring from `app.py` (`_make_router` wires inline today); `app.py` keeps only HTTP/WS routing. Only place `cast(...)` acknowledges structural Port matches and the `uow.session`/pool escape hatch may appear (AST A3).
 - `src/sdf_api/use_cases/` — top-level cross-BC package (first module in W3-OEE).
-- `src/sdf_api/shared_kernel/events.py` — hand-rolled `DomainEventDispatcher` (fail-fast; no swallow; no library). Add `shared_kernel/ports/uuid.py`/`random.py` iff a new BC needs injected UUID/random.
+- `src/sdf_api/shared_kernel/events.py` — hand-rolled `DomainEventDispatcher` (fail-fast; no swallow; no library). **No production domain-event handler is registered in Plan A** — the sole cross-BC interaction is the *synchronous* enterprise-OEE query (W3-OEE, via `use_cases/`), not an event; the dispatcher is forward-looking scaffolding, exercised only by the unit test in this task's AC. Add `shared_kernel/ports/uuid.py`/`random.py` iff a new BC needs injected UUID/random.
 - **Pool `search_path` safety (BLOCKER-2):** the shared `asyncpg` pool (`app.py:141`, `ingest/main.py`) must guarantee a connection never carries a prior tenant's `search_path` — `SET LOCAL search_path` in a per-operation txn, or pool acquire/`setup` reset (decided in ADR-0035). Composition-owned.
 - Per-BC `ports/unit_of_work.py` Protocol pattern (each BC owns its UoW — ADR-0020); new `tests/contexts/<bc>/fakes.py` per BC.
 **Fitness-gate extension (this task owns the edits):** add `tenancy`+`identity` to `bc-independence`; add **`use-cases-no-domain-or-adapters`** (ADR-0023 #4); add `sdf_api.use_cases` to `adapters-no-upward`; AST A1/A2/A3 cover new BC domains/UoWs.
