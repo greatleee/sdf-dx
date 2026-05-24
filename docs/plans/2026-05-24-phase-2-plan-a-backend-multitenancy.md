@@ -20,7 +20,7 @@
 
 ### Locked author decisions (this plan is built on them)
 1. **Three tenants = real HMG plants** — `kr` → **Ulsan plant** (inherits the existing `sdf_default` Phase-1 data; Ulsan is a KR city), `us` → **HMGMA** (Hyundai Motor Group Metaplant America, Georgia), `in` → **Chennai / HMIL** (Hyundai Motor India, Sriperumbudur). `sdf_default` is **retired** (not a 4th tenant). Tenant slug = country code; the `factory` entity carries the real plant name + region/tz/locale.
-2. **Domain tables are per-tenant** — `factory`/`production_line`/`machine` move *into* each tenant schema (alongside `machine_telemetry`/`line_state`/CAGGs). `public` holds **only** the cross-cutting registry: `tenant`, `app_user`, `membership`. This **supersedes ADR-0003's "shared metadata in `public`" clause** (via ADR-0030); the schema-per-tenant core + RLS-rejection of ADR-0003 stand. Rationale: a machine belongs to exactly one plant/tenant, so it is tenant-owned data, not shared metadata — and a per-tenant `machine` makes every per-tenant CAGG a clean **local** join (no cross-schema), which is *why this is the primary design*.
+2. **Domain tables are per-tenant** — `factory`/`production_line`/`machine` move *into* each tenant schema (alongside `machine_telemetry`/`line_state`/CAGGs). `public` holds **only** the cross-cutting registry: `tenant`, `app_user`, `membership`. This **supersedes ADR-0003's "shared metadata in `public`" clause** (via ADR-0035); the schema-per-tenant core + RLS-rejection of ADR-0003 stand. Rationale: a machine belongs to exactly one plant/tenant, so it is tenant-owned data, not shared metadata — and a per-tenant `machine` makes every per-tenant CAGG a clean **local** join (no cross-schema), which is *why this is the primary design*.
 3. **CAGG fallback order** — primary: per-tenant `machine` (local CAGG join). Secondary fallback (only if per-tenant proves hard at W1-SPIKE): **(A)** denormalize `line_id` into `machine_telemetry` to drop the join. If neither is clean, **the author decides after W1-SPIKE**.
 4. **RBAC roles = operator + tenant-admin only** (viewer → operator read-only per design-spec §13.2 reconciliation; **no integration-engineer/A-IE** in Plan A — addendum §3.3). The *publicly-exposed* `admin_demo`/persona-picker/admin-UI/demo-namespace-isolation remain **Phase 2b**; Plan A's tenant-admin is a backend role + a dogfooding seed account.
 
@@ -30,7 +30,7 @@
 
 Deliver the **backend** of the Phase-2 multi-tenant manufacturing-DX platform and stand it up on a public VPS. Three factory tenants — **`kr` (Ulsan)**, **`us` (HMGMA, Georgia)**, **`in` (Chennai/HMIL)**:
 
-1. Each tenant is an independent Postgres schema, **created by dogfooding `POST /tenants`** via an **idempotent, rerunnable multi-step provisioning sequence** (schema → Alembic `upgrade head` over `search_path` → `create_hypertable` → CAGG). *Not a single DB transaction* — DDL autocommits; ADR-0030 records the reality + idempotency design (this narrows ADR-0003's "single transactional sequence" wording via a superseding note, not an in-place edit). `sdf_default` is retired; `kr`/Ulsan is seeded fresh through onboarding and inherits the Phase-1 demo content.
+1. Each tenant is an independent Postgres schema, **created by dogfooding `POST /tenants`** via an **idempotent, rerunnable multi-step provisioning sequence** (schema → Alembic `upgrade head` over `search_path` → `create_hypertable` → CAGG). *Not a single DB transaction* — DDL autocommits; ADR-0035 records the reality + idempotency design (this narrows ADR-0003's "single transactional sequence" wording via a superseding note, not an in-place edit). `sdf_default` is retired; `kr`/Ulsan is seeded fresh through onboarding and inherits the Phase-1 demo content.
 2. **Per-tenant data boundary:** `factory`/`production_line`/`machine` + `machine_telemetry`/`line_state` + CAGGs all live in the tenant schema; `public` holds only `tenant`/`app_user`/`membership` (supersedes ADR-0003 metadata clause — see §0.2). Every per-tenant CAGG is a clean local join.
 3. Telemetry routed per-tenant: bridge derives tenant from the Sparkplug `group_id`; ingest writes via **connection-scoped** `search_path` (replacing today's single-public-schema write; no pool leakage — §2 pre-mortem #3 / BLOCKER-2). The machine resolver now resolves *within* the tenant schema (local, no cross-schema reach).
 4. Access governed by **hand-rolled JWT + argon2** (no auth library) over a **membership** model (`public.membership(user_id, tenant_id, role)`); pure `identity` domain with `can() -> Allowed | Denied`; roles = operator (read-only) + tenant-admin. **Active tenant carried in a JWT claim** (additive — keeps oasdiff green).
@@ -69,8 +69,8 @@ Deliver the **backend** of the Phase-2 multi-tenant manufacturing-DX platform an
 
 ### Pre-mortem (failure scenarios + mitigation)
 
-1. **Onboarding half-applied a tenant.** DDL autocommit → no single rollback. *Mitigation:* W2-TEN provisioning idempotent/rerunnable (guarded steps); integration test kills mid-sequence and asserts clean re-run convergence; failed-onboarding operational disposition documented (MAJOR-D); ADR-0030 records the DDL-autocommit reality.
-2. **Hand-rolled JWT — forgery *or* key leak.** *Mitigation:* alg allow-list, mandatory `exp`/`iat`/`sub`/active-tenant claims, constant-time argon2 (cost params in ADR-0028) — in the adapter; pure tested `can()`. **Signing key = injected secret, never committed** (ADR-0028 + W5). Negative security test set + `security-reviewer` gate.
+1. **Onboarding half-applied a tenant.** DDL autocommit → no single rollback. *Mitigation:* W2-TEN provisioning idempotent/rerunnable (guarded steps); integration test kills mid-sequence and asserts clean re-run convergence; failed-onboarding operational disposition documented (MAJOR-D); ADR-0035 records the DDL-autocommit reality.
+2. **Hand-rolled JWT — forgery *or* key leak.** *Mitigation:* alg allow-list, mandatory `exp`/`iat`/`sub`/active-tenant claims, constant-time argon2 (cost params in ADR-0033) — in the adapter; pure tested `can()`. **Signing key = injected secret, never committed** (ADR-0033 + W5). Negative security test set + `security-reviewer` gate.
 3. **Wrong-schema read/write.** (a) *unresolvable* tenant falls back to `public`; (b) **pooled connection leaks a prior tenant's `search_path`** → invisible cross-tenant R/W. *Mitigation:* W2-ING removes the public write path (unresolvable → logged drop, never public); W1-SCAFFOLD makes `search_path` **connection-scoped** (`SET LOCAL` in a per-operation txn, or pool acquire/`setup` reset); **no-leak integration test** in CI. KR record lands in `kr`, absent from `us`/`public`.
 4. **Per-tenant CAGG can't be created/refreshed in a freshly-onboarded schema.** With the per-tenant `machine` decision the CAGG is a *local* join (the high-risk cross-schema variant is gone), but onboarding still has to create the hypertable + CAGG + refresh policy in a brand-new schema reliably. *Mitigation:* **W1-SPIKE** validates per-schema CAGG creation+refresh on an onboarded schema *before* W1-ALEMBIC baselines on it; it also records whether the secondary fallback **(A)** denormalization would be needed if an unforeseen snag appears. If per-tenant `machine` proves hard, **the author decides post-spike** (per §0.3).
 
@@ -85,7 +85,7 @@ Chapter 0 (docs)  ── FIRST commits (ADR-0000) ──────────
   C0-ADR ∥ C0-UC ∥ C0-GLOSS ∥ C0-ACTORS ∥ C0-DOMAIN ∥ C0-UNKNOWNS                     │
                                                                                       ▼
 Wave 1 — Foundations
-  W1-SPIKE     [GATE] validate per-tenant CAGG create+refresh on an onboarded schema  ──► feeds ADR-0030, gates W1-ALEMBIC + Wave 2
+  W1-SPIKE     [GATE] validate per-tenant CAGG create+refresh on an onboarded schema  ──► feeds ADR-0035, gates W1-ALEMBIC + Wave 2
   W1-CONTRACTS   contracts surface + regen (tenant via JWT claim = additive)           ∥
   W1-SCAFFOLD    composition.py + use_cases/ + DomainEventDispatcher + POOL search_path safety + fitness gates ∥
   W1-CI          .github/workflows/ci.yml: Postgres+Timescale integration job          ∥
@@ -131,26 +131,26 @@ Phase-end — Promote / living-doc
 > **Commit-order note (git-log shape):** the Phase-1 plan still sits un-archived in `docs/plans/`. Before landing Phase-2 Chapter 0, confirm whether the Phase-1 plan is archived first (per the phase-tag convention) so Phase-2 Ch0 commits open a clean chapter in `git log`. Sequencing confirmation, not a content change.
 
 ### C0-ADR — Decision records
-Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are fine).
+Next free number is **0033** (existing run 0000–0032; **0028–0032 are the frontend/lint ADRs that merged *after* this plan landed** — PRs #17–#19 — so the originally-reserved 0028–0033 block shifted +5 to **0033–0038**; gaps at 0013–0015 are fine).
 
 | ADR | Topic | Must record |
 |---|---|---|
-| 0028 | Identity & auth model | hand-rolled JWT (PyJWT) + argon2 (**cost params**); membership many-to-many, per-(user,tenant) role; roles = operator/tenant-admin (**no A-IE**); §13.2 "viewer" → operator read-only; crypto+token sign/verify in adapters, pure `can()`; **active tenant = JWT claim** (additive); **signing-key custody** (injected secret, never committed, rotation posture). Public `admin_demo`/persona-picker/admin-UI = Phase 2b, not Plan A |
-| 0029 | BC formalization outcome | extract `tenancy`+`identity`; make `monitoring`/`topology` explicit; relation to ADR-0008 + ADR-0009; cross-BC via `use_cases/` + in-process `DomainEventDispatcher`. **Note:** ADR-0009's `contexts/<bc>/ports.py` is read as `ports/<noun>.py` per ADR-0022 (don't edit 0009) |
-| 0030 | Multi-schema persistence & tenant data isolation | Alembic multi-schema migrations replace raw `001`–`005` as schema SoT; **per-tenant data boundary — `factory`/`production_line`/`machine` live in the tenant schema; `public` holds only `tenant`/`app_user`/`membership`** → **this ADR supersedes ADR-0003's "shared relational metadata lives in `public`" clause** (schema-per-tenant core + RLS-rejection retained; mark ADR-0003 status "partially superseded by ADR-0030"); **per-tenant CAGG = local join** (primary); **(A) denormalize `line_id` into `machine_telemetry`** documented as the *secondary* fallback if per-tenant proves hard (author decides post-W1-SPIKE); **connection-level `search_path` safety**; **idempotent rerunnable onboarding** + DDL-autocommit reality (supersedes ADR-0003's "single transactional sequence" wording via an in-ADR note); **`sdf_default` retired** (kr/Ulsan onboarded fresh) |
-| 0031 | MachineKind automotive 5-shop taxonomy | `stamping/body/paint/assembly/inspection`; `machineKey` stays free string ⇒ no enum/codegen change; enum in domain only; seed/simulator machineKeys + `sparkplug_node_id` `<type>` segment change in lockstep |
-| 0032 | Cross-tenant thin enterprise-OEE scope | one cross-BC use case, `UNION ALL` over member tenants' (local-join) CAGGs, membership-driven authz, **no new role**; reframes ADR-0003's "Phase 3+ aggregator" as the *general* analytics layer; **does NOT supersede ADR-0003's core** |
-| 0033 | Seeded-credential → role mapping + Cloudflare single-stack | Plan A: backend operator + tenant-admin roles; dogfooding tenant-admin seed account; public `op_demo`/`admin_demo` exposure deferred (addendum §3.3 — `op_demo` Phase 2 public is a Plan-B/README concern); Cloudflare Tunnel single-stack posture (addendum §5) |
+| 0033 | Identity & auth model | hand-rolled JWT (PyJWT) + argon2 (**cost params**); membership many-to-many, per-(user,tenant) role; roles = operator/tenant-admin (**no A-IE**); §13.2 "viewer" → operator read-only; crypto+token sign/verify in adapters, pure `can()`; **active tenant = JWT claim** (additive); **signing-key custody** (injected secret, never committed, rotation posture). Public `admin_demo`/persona-picker/admin-UI = Phase 2b, not Plan A |
+| 0034 | BC formalization outcome | extract `tenancy`+`identity`; make `monitoring`/`topology` explicit; relation to ADR-0008 + ADR-0009; cross-BC via `use_cases/` + in-process `DomainEventDispatcher`. **Note:** ADR-0009's `contexts/<bc>/ports.py` is read as `ports/<noun>.py` per ADR-0022 (don't edit 0009) |
+| 0035 | Multi-schema persistence & tenant data isolation | Alembic multi-schema migrations replace raw `001`–`005` as schema SoT; **per-tenant data boundary — `factory`/`production_line`/`machine` live in the tenant schema; `public` holds only `tenant`/`app_user`/`membership`** → **this ADR supersedes ADR-0003's "shared relational metadata lives in `public`" clause** (schema-per-tenant core + RLS-rejection retained; mark ADR-0003 status "partially superseded by ADR-0035"); **per-tenant CAGG = local join** (primary); **(A) denormalize `line_id` into `machine_telemetry`** documented as the *secondary* fallback if per-tenant proves hard (author decides post-W1-SPIKE); **connection-level `search_path` safety**; **idempotent rerunnable onboarding** + DDL-autocommit reality (supersedes ADR-0003's "single transactional sequence" wording via an in-ADR note); **`sdf_default` retired** (kr/Ulsan onboarded fresh) |
+| 0036 | MachineKind automotive 5-shop taxonomy | `stamping/body/paint/assembly/inspection`; `machineKey` stays free string ⇒ no enum/codegen change; enum in domain only; seed/simulator machineKeys + `sparkplug_node_id` `<type>` segment change in lockstep |
+| 0037 | Cross-tenant thin enterprise-OEE scope | one cross-BC use case, `UNION ALL` over member tenants' (local-join) CAGGs, membership-driven authz, **no new role**; reframes ADR-0003's "Phase 3+ aggregator" as the *general* analytics layer; **does NOT supersede ADR-0003's core** |
+| 0038 | Seeded-credential → role mapping + Cloudflare single-stack | Plan A: backend operator + tenant-admin roles; dogfooding tenant-admin seed account; public `op_demo`/`admin_demo` exposure deferred (addendum §3.3 — `op_demo` Phase 2 public is a Plan-B/README concern); Cloudflare Tunnel single-stack posture (addendum §5) |
 
-> **Mid-phase ADRs (NOT Ch0):** deploy platform (Hetzner CX32 vs Oracle Free) at W5-DEPLOY; CAGG-fallback pivot *iff* W1-SPIKE forces (A) or another design. Numbered 0034+ at decision time.
+> **Mid-phase ADRs (NOT Ch0):** deploy platform (Hetzner CX32 vs Oracle Free) at W5-DEPLOY; CAGG-fallback pivot *iff* W1-SPIKE forces (A) or another design. Numbered **0039+** at decision time.
 
 **AC (C0-ADR):**
 - [ ] Each ADR follows `docs/ADR/template.md`; status `Accepted`; cross-references scope doc + extended/superseded ADRs.
-- [ ] ADR-0028 resolves §13.2 viewer→operator-read-only, specifies JWT-claim tenant scoping, signing-key custody, argon2 cost params, and that A-IE + public `admin_demo` are out of Plan A.
-- [ ] ADR-0030 records the per-tenant data boundary, **explicitly supersedes ADR-0003's metadata-placement clause** (and updates ADR-0003 status to "partially superseded"), states per-tenant CAGG = primary with (A) as documented fallback, connection-scoped `search_path`, idempotent onboarding (no "single transaction" claim), and `sdf_default` retirement.
-- [ ] ADR-0032 does **not** supersede ADR-0003's core.
-- [ ] ADR-0029 notes the stale ADR-0009 `ports.py` reference without editing 0009.
-- [ ] No accepted ADR edited in place; supersede-only for reversals (the ADR-0003 supersede is a *new* ADR-0030 + a status flag on 0003).
+- [ ] ADR-0033 resolves §13.2 viewer→operator-read-only, specifies JWT-claim tenant scoping, signing-key custody, argon2 cost params, and that A-IE + public `admin_demo` are out of Plan A.
+- [ ] ADR-0035 records the per-tenant data boundary, **explicitly supersedes ADR-0003's metadata-placement clause** (and updates ADR-0003 status to "partially superseded"), states per-tenant CAGG = primary with (A) as documented fallback, connection-scoped `search_path`, idempotent onboarding (no "single transaction" claim), and `sdf_default` retirement.
+- [ ] ADR-0037 does **not** supersede ADR-0003's core.
+- [ ] ADR-0034 notes the stale ADR-0009 `ports.py` reference without editing 0009.
+- [ ] No accepted ADR edited in place; supersede-only for reversals (the ADR-0003 supersede is a *new* ADR-0035 + a status flag on 0003).
 
 ### C0-UC — Use-case drafts (`status: draft`; E2E + promote → Plan B)
 > **UC numbering (resolved):** UC-001/002 exist; Phase-2b reserves **UC-003** ("UC-003 E2E" in the scope doc). Plan A takes **UC-004/005/006**; one-line reservation note in `USE-CASES.md`.
@@ -185,15 +185,15 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 
 #### W1-SPIKE — De-risk per-tenant CAGG on a freshly-onboarded schema (GATE)
 **Depends on:** Ch0. **Gates:** W1-ALEMBIC, Wave 2. **Parallel with:** other W1.
-**Nature:** throwaway de-risking probe (testcontainers integration test, discarded after the decision is recorded in ADR-0030).
+**Nature:** throwaway de-risking probe (testcontainers integration test, discarded after the decision is recorded in ADR-0035).
 **What it proves:** in a brand-new tenant schema, can the onboarding sequence create the hypertable + a `line_oee`-style CAGG (joining the **schema-local** `machine`) + a refresh policy, and read it back over `search_path` — reliably and idempotently? Secondary: if per-tenant `machine` hits an unforeseen snag, confirm whether fallback **(A)** (denormalized `line_id`, no join) would be needed.
 **Acceptance Criteria:**
 - [ ] Documented empirical answer: per-tenant CAGG (local join) creates + refreshes + reads on a fresh schema → primary design stands; or a snag → fallback **(A)** or an author decision is recorded.
-- [ ] Outcome written into **ADR-0030**; any pivot from the per-tenant primary becomes a mid-phase ADR.
+- [ ] Outcome written into **ADR-0035**; any pivot from the per-tenant primary becomes a mid-phase ADR.
 - [ ] Probe code removed (or quarantined under a clearly-throwaway path). **Discard verified:** a grep/CI assertion confirms no spike artifact leaks into `apps/*/tests/` or the CI default test run.
 
 #### W1-CONTRACTS — Contract surface + regeneration
-**Depends on:** Ch0 (ADR-0028/0032). **Parallel with:** other W1.
+**Depends on:** Ch0 (ADR-0033/0037). **Parallel with:** other W1.
 **Commit:** `feat(contracts): phase-2 auth, tenant onboarding, enterprise-OEE surfaces`
 **Surface to add to `packages/contracts/openapi/sdf-api.yaml`** (described, not written):
 - Auth: `POST /auth/login` (credentials → token whose claims include `sub` + active tenant + that tenant's role); tenant-switch surface re-issuing a token with a different active-tenant claim. **Active tenant = token claim; existing monitoring routes keep signatures (additive).**
@@ -209,13 +209,13 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 - [ ] `machine_telemetry.schema.json` byte-identical.
 
 #### W1-SCAFFOLD — Composition root, cross-BC seam, **pool `search_path` safety**, fitness gates
-**Depends on:** Ch0 (ADR-0029/0030). **Parallel with:** other W1.
+**Depends on:** Ch0 (ADR-0034/0035). **Parallel with:** other W1.
 **Commit(s):** `feat(api): composition root + use_cases seam + DomainEventDispatcher`; `feat(api): connection-scoped search_path on the asyncpg pool`; `chore(api): extend fitness gates for new BCs + use_cases`.
 **Scaffolding:**
 - `src/sdf_api/composition.py` — extract DI wiring from `app.py` (`_make_router` wires inline today); `app.py` keeps only HTTP/WS routing. Only place `cast(...)` acknowledges structural Port matches and the `uow.session`/pool escape hatch may appear (AST A3).
 - `src/sdf_api/use_cases/` — top-level cross-BC package (first module in W3-OEE).
 - `src/sdf_api/shared_kernel/events.py` — hand-rolled `DomainEventDispatcher` (fail-fast; no swallow; no library). Add `shared_kernel/ports/uuid.py`/`random.py` iff a new BC needs injected UUID/random.
-- **Pool `search_path` safety (BLOCKER-2):** the shared `asyncpg` pool (`app.py:141`, `ingest/main.py`) must guarantee a connection never carries a prior tenant's `search_path` — `SET LOCAL search_path` in a per-operation txn, or pool acquire/`setup` reset (decided in ADR-0030). Composition-owned.
+- **Pool `search_path` safety (BLOCKER-2):** the shared `asyncpg` pool (`app.py:141`, `ingest/main.py`) must guarantee a connection never carries a prior tenant's `search_path` — `SET LOCAL search_path` in a per-operation txn, or pool acquire/`setup` reset (decided in ADR-0035). Composition-owned.
 - Per-BC `ports/unit_of_work.py` Protocol pattern (each BC owns its UoW — ADR-0020); new `tests/contexts/<bc>/fakes.py` per BC.
 **Fitness-gate extension (this task owns the edits):** add `tenancy`+`identity` to `bc-independence`; add **`use-cases-no-domain-or-adapters`** (ADR-0023 #4); add `sdf_api.use_cases` to `adapters-no-upward`; AST A1/A2/A3 cover new BC domains/UoWs.
 **Acceptance Criteria / tests:**
@@ -232,7 +232,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 **Acceptance Criteria:** onboarding/idempotency, tenant-isolation, no-leak, search_path-routing, per-tenant-CAGG tests run + pass in CI; DoD's "full CI gate set green" true for the safety-critical tier; path-correct for both Python apps.
 
 #### W1-EDGE — Kotlin edge: multi-tenant bridge + 5-shop simulator + scenarios
-**Depends on:** Ch0 (ADR-0031). **Parallel with:** all Python W1.
+**Depends on:** Ch0 (ADR-0036). **Parallel with:** all Python W1.
 **Commit(s):** `feat(edge): derive tenant from Sparkplug group_id`; `refactor(edge): MachineKind 5-shop machine list`; `feat(edge): per-tenant SimulatorScenario config`.
 **Scaffolding:** `bridge/` derives tenant from `group_id` (replacing the `SDF_DEFAULT_TENANT` constant); topic `sdf.${tenantId}.machine.telemetry`, key `${lineId}/${machineKey}` kept. `simulator/Main.kt` `MACHINE_TYPES` → 5-shop; `SimulatorScenario` config (takt/cycle-time, shift, failure/quality/alarm) by env. No `System.currentTimeMillis()`/`Instant.now()` in any Kotlin domain (K1).
 **Acceptance Criteria / tests:**
@@ -242,12 +242,12 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 - [ ] `gradle test` + `ktlint` + `detekt` green; Konsist K1/K2 unaffected.
 
 #### W1-MK-PY — Python MachineKind 5-shop rename (domain)
-**Depends on:** Ch0 (ADR-0031, C0-GLOSS). **Parallel with:** other W1 (touches `topology/domain/machine.py` + tests only).
+**Depends on:** Ch0 (ADR-0036, C0-GLOSS). **Parallel with:** other W1 (touches `topology/domain/machine.py` + tests only).
 **Commit:** `refactor(api): MachineKind → automotive 5-shop taxonomy`
 **AC:** `test_machine.py` updated; every variant + exhaustiveness covered; no old name in `sdf_api` (grep); domain purity gates green; glossary wording matches enum verbatim. *(Seed-SQL machine rename owned by W1-ALEMBIC.)*
 
 #### W1-ALEMBIC — Alembic multi-schema migration foundation
-**Depends on:** **W1-SPIKE**, Ch0 (ADR-0030). **Parallel with:** other W1 after the spike resolves.
+**Depends on:** **W1-SPIKE**, Ch0 (ADR-0035). **Parallel with:** other W1 after the spike resolves.
 **Commit:** `feat(api): Alembic multi-schema migrations + per-tenant baseline + public registry`
 **Scaffolding:**
 - `apps/api-python/alembic.ini`, `migrations/env.py` (search_path-aware), `migrations/versions/`.
@@ -270,7 +270,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 **Scaffolding:**
 - `contexts/identity/domain/` — `User`, `Role` (operator | tenant-admin), `Permission`, pure `can(action, role) -> Allowed | Denied`. Frozen dataclasses; no crypto/datetime.now.
 - `contexts/identity/ports/` — `user_reader.py`, `membership_reader.py`, `token_port.py`, `password_hasher.py`, `unit_of_work.py`.
-- `contexts/identity/adapters/` — `PostgresUserRepo`, `PostgresMembershipRepo` (ORM-contained), `PyJwtTokenAdapter` (alg allow-list; mandatory claims incl. active tenant; **injected signing key**), `Argon2PasswordHasher` (cost params per ADR-0028). Pydantic only at `adapters/http/`.
+- `contexts/identity/adapters/` — `PostgresUserRepo`, `PostgresMembershipRepo` (ORM-contained), `PyJwtTokenAdapter` (alg allow-list; mandatory claims incl. active tenant; **injected signing key**), `Argon2PasswordHasher` (cost params per ADR-0033). Pydantic only at `adapters/http/`.
 - `contexts/identity/application/` — `authenticate`, `authorize_tenant_access`.
 - `tests/contexts/identity/fakes.py` — `IdentityInMemoryDataset`, `FakeUnitOfWork`, fake token/hasher honoring real-adapter rules.
 **Acceptance Criteria / tests:**
@@ -288,7 +288,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 - `contexts/tenancy/domain/` — `Tenant` (slug, schema-name VO, region/tz/locale); `SchemaName` VO (safe identifier; reject injection as `Rejected`, not raise); onboarding outcome `Onboarded | Rejected(reason) | AlreadyExists`.
 - `contexts/tenancy/ports/` — `tenant_registry.py`, `schema_provisioner.py` (create schema + Alembic over search_path + hypertable + **per-tenant CAGG**), `unit_of_work.py`.
 - `contexts/tenancy/adapters/` — `PostgresTenantRegistry`, `AlembicSchemaProvisioner` (idempotent steps; connection-scoped search_path).
-- `contexts/tenancy/application/` — `onboard_tenant` (idempotent, rerunnable; multi-step DDL per ADR-0030).
+- `contexts/tenancy/application/` — `onboard_tenant` (idempotent, rerunnable; multi-step DDL per ADR-0035).
 **Acceptance Criteria / tests:**
 - [ ] **Domain (pure):** `SchemaName` rejects unsafe identifiers (`Rejected`); property test over slug inputs.
 - [ ] **Integration (CI):** `POST /tenants` for `kr` creates schema `kr`, runs `upgrade head`, creates per-tenant hypertable + local-join CAGG, registers `public.tenant`; verified via `timescaledb_information`.
@@ -346,7 +346,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 **Acceptance Criteria / tests:**
 - [ ] **Use-case test (per-BC in-memory datasets, never shared):** caller with {kr, us} → average over kr+us; `in` excluded. Pure averaging asserted on the read model.
 - [ ] **Integration (CI):** with kr/us/in seeded, the endpoint returns the member-scoped average; the **cross-schema UNION-ALL SQL is integration-tested only**.
-- [ ] No new role (membership-driven authz) — verify against ADR-0032.
+- [ ] No new role (membership-driven authz) — verify against ADR-0037.
 - [ ] `use-cases-no-domain-or-adapters` + `bc-independence` green.
 
 ### Wave 4 — Dogfood demo data
@@ -373,7 +373,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 **Scaffolding:**
 - **Mid-phase ADR (platform):** Hetzner CX32 vs Oracle Free — decision + rationale + conditional multi-arch/ARM build branch (only if Oracle).
 - `docker-compose.prod.yml` **at repo root** (matching `docker-compose.yml`) — prod profile: timescale, broker, ingest, api, **3 per-tenant simulators (kr/us/in)**, bridge, Cloudflare Tunnel sidecar. **Remove the nonexistent dashboard build target** (`docker-compose.yml:101-102`).
-- **JWT signing-key custody (BLOCKER-A):** injected secret (env/mounted file), never committed; documented in compose/ops + ADR-0028.
+- **JWT signing-key custody (BLOCKER-A):** injected secret (env/mounted file), never committed; documented in compose/ops + ADR-0033.
 - `restart: unless-stopped` on simulators; 7-day TimescaleDB retention; Cloudflare Tunnel config; UptimeRobot monitor on API health + down-alert.
 - **Rollback note (MAJOR-D):** failed Tunnel/compose cutover; disposition of a tenant onboarded with a broken schema in prod.
 **Acceptance Criteria / tests:**
@@ -392,7 +392,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 **Commit:** `docs: phase-2a status notes + known-unknowns resolutions`
 **AC:**
 - [ ] UC-004/005/006 rows annotated **backend-verified**; full `status: implemented` **deferred to Plan B** (coverage gate needs an existing `related_e2e` file). Do not flip now.
-- [ ] KNOWN-UNKNOWNS: platform decision resolved (→ platform ADR); per-tenant CAGG resolved (→ W1-SPIKE/ADR-0030); 5-shop-abstraction-vs-real-plant note kept; demo data-signal tuning updated.
+- [ ] KNOWN-UNKNOWNS: platform decision resolved (→ platform ADR); per-tenant CAGG resolved (→ W1-SPIKE/ADR-0035); 5-shop-abstraction-vs-real-plant note kept; demo data-signal tuning updated.
 - [ ] `uv run scripts/check-use-case-coverage.py` green.
 
 ---
@@ -408,7 +408,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 | **Contract** | spectral lint; codegen drift; **`oasdiff breaking` (blocking, expected GREEN — additive)**; machine_telemetry unchanged | `packages/contracts` `make verify` + CI | contract-first §3 |
 | **Architecture/fitness** | extended import-linter (new BCs, use_cases); Konsist K1/K2; AST A1–A3 | `tests/architecture/`, Konsist — CI | no opt-outs |
 | **Observability** | per-tenant ingest counter; unresolved-tenant alert/log; API health; UptimeRobot; always-on simulator restart | ingest + deploy | W2-ING + W5-DEPLOY |
-| **De-risking probe** | per-tenant CAGG feasibility on a fresh schema (throwaway) | W1-SPIKE (discarded) | ADR-0030 outcome |
+| **De-risking probe** | per-tenant CAGG feasibility on a fresh schema (throwaway) | W1-SPIKE (discarded) | ADR-0035 outcome |
 | **E2E (Gherkin)** | UC-004/005/006 acceptance scenarios authored in Ch0 | **deferred to Plan B** | Plan B coverage gate |
 
 ---
@@ -416,7 +416,7 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 ## 7. Global Acceptance Criteria
 
 - [ ] 3 tenant schemas (`kr`/Ulsan, `us`/HMGMA, `in`/Chennai) created **by dogfooding `POST /tenants`** via an **idempotent, rerunnable** sequence (not one DB transaction); `sdf_default` retired.
-- [ ] Domain tables (factory/line/machine + telemetry/state + CAGG) are **per-tenant**; `public` holds only tenant/app_user/membership (ADR-0030 supersedes ADR-0003 metadata clause).
+- [ ] Domain tables (factory/line/machine + telemetry/state + CAGG) are **per-tenant**; `public` holds only tenant/app_user/membership (ADR-0035 supersedes ADR-0003 metadata clause).
 - [ ] Ingest routes telemetry into the correct tenant schema via **connection-scoped** `search_path` (no pool leak); machine resolved locally.
 - [ ] `tenancy`/`identity` BCs formalized; monitoring/topology explicit (incl. tenant-aware WS poller); cross-BC `use_cases/` + `DomainEventDispatcher` wired; fitness gates extended & green.
 - [ ] Hand-rolled JWT (issue/verify, injected signing key) + argon2; pure `identity` `can()`; zero auth library.
@@ -439,11 +439,11 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 | Per-tenant CAGG can't create/refresh on a fresh onboarded schema | Low-Med | High | **W1-SPIKE** before baseline; per-tenant local join is the low-risk primary; (A) denormalize as documented 2nd fallback; author decides post-spike | W1-SPIKE, W1-ALEMBIC |
 | `search_path` leaks across pooled connections | Med | High | Connection-scoped `SET LOCAL`/pool reset; **no-leak integration AC in CI** | W1-SCAFFOLD, W2-ING/FORMAL |
 | WS poller broadcasts all tenants | Med | High | Tenant-aware poller; WS isolation AC | W2-FORMAL |
-| Half-applied onboarding (DDL autocommit) | Med | High | Idempotent/rerunnable; fault-injection test; ADR-0030; rollback note | W2-TEN, W1-ALEMBIC |
+| Half-applied onboarding (DDL autocommit) | Med | High | Idempotent/rerunnable; fault-injection test; ADR-0035; rollback note | W2-TEN, W1-ALEMBIC |
 | Hand-rolled JWT forgery | Med | High | Alg allow-list, mandatory claims, negative test set, `security-reviewer` | W2-ID, W3-RBAC |
-| JWT signing-key leaked/committed | Med | High | Injected secret; ADR-0028; grep AC | W2-ID, W5-DEPLOY |
+| JWT signing-key leaked/committed | Med | High | Injected secret; ADR-0033; grep AC | W2-ID, W5-DEPLOY |
 | Isolation tests run only locally | Med | High | **W1-CI** integration job | W1-CI |
-| ADR-0003 supersede done carelessly (orphaned references) | Low | Med | ADR-0030 explicitly supersedes the metadata clause + flips ADR-0003 status; grep for stale `public.machine` refs | C0-ADR, W1-ALEMBIC |
+| ADR-0003 supersede done carelessly (orphaned references) | Low | Med | ADR-0035 explicitly supersedes the metadata clause + flips ADR-0003 status; grep for stale `public.machine` refs | C0-ADR, W1-ALEMBIC |
 | Existing-route tenant scoping breaks blocking oasdiff | Low-Med | Med | Tenant via **JWT claim** (additive) | W1-CONTRACTS |
 | Real-plant 5-shop abstraction reads as inaccurate | Low | Low-Med | KNOWN-UNKNOWNS note (honest simplification); scenario params, not fake processes | C0-UNKNOWNS, W4-SEED |
 | Demo OEE stories indistinguishable / implausible | Med | Med | Distinct-OEE assertion + domain-reasonableness review | W4-SEED |
@@ -482,6 +482,6 @@ Next free number is **0028** (existing run 0000–0027; gaps at 0013–0015 are 
 
 **Author decision pass (post-APPROVED):**
 - **Tenants = real HMG plants:** `kr` → Ulsan (inherits Phase-1 `sdf_default` data; Ulsan ∈ Korea), `us` → HMGMA (Georgia), `in` → Chennai/HMIL. `sdf_default` **retired** (not a 4th tenant). Threaded through W1-ALEMBIC, W2-*, W4-SEED, DOMAIN-NOTES, scenarios. *(Singapore/HMGICS rejected — cell-based, not a 5-shop line.)*
-- **Per-tenant data boundary (1순위):** factory/line/machine move into the tenant schema; `public` = tenant/app_user/membership only. **ADR-0030 supersedes ADR-0003's "shared metadata in public" clause** (status-flag, no in-place edit). Removes cross-schema CAGG risk (local join); W1-SPIKE rescoped to per-schema CAGG create/refresh on a fresh schema. **(A) denormalization = documented 2nd fallback; author decides post-spike if per-tenant proves hard.** (Reframed per author note: "ADR 안 깨짐"은 장점이 아님 — placement chosen on domain-correctness, not ADR inertia.)
-- **RBAC = operator + tenant-admin only** (no A-IE; viewer→operator read-only). Public `admin_demo`/persona-picker/admin-UI confirmed Phase 2b, not Plan A (addendum §3.3) — recorded in ADR-0028/0033.
+- **Per-tenant data boundary (1순위):** factory/line/machine move into the tenant schema; `public` = tenant/app_user/membership only. **ADR-0035 supersedes ADR-0003's "shared metadata in public" clause** (status-flag, no in-place edit). Removes cross-schema CAGG risk (local join); W1-SPIKE rescoped to per-schema CAGG create/refresh on a fresh schema. **(A) denormalization = documented 2nd fallback; author decides post-spike if per-tenant proves hard.** (Reframed per author note: "ADR 안 깨짐"은 장점이 아님 — placement chosen on domain-correctness, not ADR inertia.)
+- **RBAC = operator + tenant-admin only** (no A-IE; viewer→operator read-only). Public `admin_demo`/persona-picker/admin-UI confirmed Phase 2b, not Plan A (addendum §3.3) — recorded in ADR-0033/0038.
 - KNOWN-UNKNOWNS: added the "5-shop abstraction vs real-plant reality" honest-simplification note.
