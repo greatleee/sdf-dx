@@ -1,6 +1,6 @@
 # Frontend Code Architecture — Rules
 
-Fast-scan condensation of `docs/architecture/2026-05-24-frontend-architecture.md` + ADRs 0004 / 0005 / 0007 / 0016 / 0018 / 0022 / 0028 / 0029. Covers the React/TypeScript dashboard under `apps/dashboard-react/`.
+Fast-scan condensation of `docs/architecture/2026-05-24-frontend-architecture.md` + ADRs 0004 / 0005 / 0007 / 0016 / 0018 / 0022 / 0028 / 0029 / 0030. Covers the React/TypeScript dashboard under `apps/dashboard-react/`.
 
 Rules-only, do/don't form; the arch doc carries the *why*. **On conflict between Phase 1 plan Section F code samples and these rules, these rules win** — ADR-0028 / ADR-0029 supersede the Section F sketch.
 
@@ -163,10 +163,18 @@ DON'T disable a boundary rule to make code pass. Fix the direction.
 
 ---
 
-## Deferred (out of Phase 1)
+## §12. State placement & deferred infrastructure
 
-Forms, client routing / multi-view navigation, and optimistic mutations / command-as-data are out of scope for the read-mostly single-`Line` dashboard. Rationale and the placement each takes when it lands are in the arch doc (§10). One rule binds now: a form's Zod schema lives at the form boundary (`application/` / `adapters/`), **never** in `domain/` (§3).
+Binds **now** (ADR-0030):
+- **URL (search params) is the source of truth for shareable / navigable view state** — which `Line`, time window, filters. Never component state or a store, even the single Phase-1 `Line`.
+- State residences: server / live data → Query cache (§4/§5, never copied into a store); shareable view state → URL; ephemeral UI state → `useState` / Context (low-frequency config only); cross-tree non-server non-URL UI state → a store, only when real.
+- A form's Zod schema lives at the **form boundary** (`application/` / `adapters/`), **never** in `domain/` (§3).
+
+Deferred — out of Phase 1; arch §10 + ADR-0030 give the placement:
+- **Routing → TanStack Router** (lands with the Phase 2 multi-`Line` picker; data loading derives the query key from URL params inside `application/` hooks; blocking Suspense-loader deferred; no navigation port until something navigates).
+- **Client store → Zustand v5** (only when a real cross-tree, non-server, non-URL need appears; never holds server/live data — that's the cache, ADR-0029).
+- **Forms → React Hook Form** (first operator write-action); **optimistic mutations / command-as-data** (when a write action's latency warrants).
 
 ---
 
-Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache). Parents: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
+Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache), ADR-0030 (URL-as-SoT + state split; router/store deferred). Parents: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
