@@ -9,6 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e:fake": "VITE_FAKE=1 playwright test --project=fake",
@@ -25,6 +27,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.11.1",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.0",
     "@playwright/test": "^1.48.0",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
