@@ -1,4 +1,4 @@
-.PHONY: python kotlin openapi-python openapi-typescript kafka-python lint all verify
+.PHONY: python kotlin openapi-python openapi-typescript openapi-zod kafka-python lint all verify
 
 PYTHON_OUT := codegen/python
 KOTLIN_OUT := codegen/kotlin
@@ -38,6 +38,15 @@ openapi-typescript:
 	pnpm dlx openapi-typescript@7.13.0 openapi/sdf-api.yaml \
 	  -o $(TS_OUT)/sdf-openapi-client.ts
 
+# ADR-0028: generate Zod v4 runtime schemas (the frontend's network-boundary
+# validator — the FE analog of the generated Pydantic boundary DTO).
+# Uses a hand-authored openapi-ts.config.ts (pipeline INPUT, never rewritten
+# by make all) so the config is version-controlled alongside the schema.
+# ESM-only tool; requires Node ≥ 22.13 (see .github/workflows/contracts.yml).
+openapi-zod:
+	mkdir -p $(TS_OUT)/zod
+	pnpm dlx @hey-api/openapi-ts@0.97.2
+
 # One module per payload schema. datamodel-codegen rejects a single-file
 # --output for a directory input ("modular references require an output
 # directory"), so each *.schema.json is generated independently into kafka/.
@@ -64,7 +73,7 @@ lint:
 	  --ruleset openapi/.spectral.yaml \
 	  openapi/sdf-api.yaml
 
-all: python kotlin openapi-python openapi-typescript kafka-python
+all: python kotlin openapi-python openapi-typescript openapi-zod kafka-python
 
 # Gates run in ADR-0005 order: quality (lint) -> regenerate -> drift.
 verify:
