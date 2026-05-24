@@ -5,7 +5,7 @@
 | **Date** | 2026-05-23 (aligned with `the reference codebase` reference per ADR-0019~0024 same day) |
 | **Status** | Draft — initial body + reference alignment. |
 | **Layer** | Engineering Conventions (see `docs/SOT-LAYERS.md`) |
-| **Scope** | Backend code-level conventions for Python + Kotlin. Frontend has its own conventions (TBD). |
+| **Scope** | Backend code-level conventions for Python + Kotlin. Frontend conventions: `docs/architecture/2026-05-24-frontend-architecture.md` (+ `.claude/rules/frontend-code-architecture.md`; ADR-0028 / 0029). |
 | **Audience** | Self (future me), LLM pair, portfolio reviewer reading code first. |
 | **Related** | Strategy `docs/roadmap/2026-05-22-sdf-manufacturing-dx-portfolio-design.md` §2, §6, §9. Working notes `docs/plans/2026-05-23-arch-doc-discussion-notes.md`. |
 

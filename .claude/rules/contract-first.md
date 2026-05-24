@@ -28,6 +28,7 @@ DON'T:
 DO:
 - OpenAPI → Pydantic v2 **models only**: `datamodel-codegen --output-model-type pydantic_v2.BaseModel`.
 - OpenAPI → TypeScript: `openapi-typescript`.
+- OpenAPI → Zod runtime schemas: `@hey-api/openapi-ts` zod plugin (standalone, alongside the TypeScript types) — the runtime validator for the frontend network boundary (ADR-0028). ESM-only; pin Zod v4.
 - JSON Schema → Pydantic v2: `datamodel-codegen --input-file-type jsonschema`.
 - Sparkplug `.proto` → Python + Kotlin stubs via `protoc`.
 - Phase 2+ Kotlin REST: `openapi-generator` `kotlin-spring` generator + `delegatePattern=true` — implement the generated delegate interface only.
@@ -64,4 +65,4 @@ DON'T:
 
 ---
 
-Full rationale: `docs/ADR/0005-contract-first-llm-drift.md`. Boundary-DTO/domain split: `backend-code-architecture.md` §5 + ADR-0018. Spec policy: design spec §2.3.
+Full rationale: `docs/ADR/0005-contract-first-llm-drift.md`. Boundary-DTO/domain split: `backend-code-architecture.md` §5 + ADR-0018; frontend boundary (generated Zod = boundary, domain type separate): `frontend-code-architecture.md` §3 + ADR-0028. Spec policy: design spec §2.3.

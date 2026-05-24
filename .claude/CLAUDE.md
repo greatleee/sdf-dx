@@ -50,6 +50,7 @@ code follows the contract — never the other way around.
 | File | Governs | Applies when |
 |---|---|---|
 | `rules/backend-code-architecture.md` | Layer placement, domain purity, error-as-value, clock/UUID/random injection, ORM containment, ports, naming, tests, CI gates. On conflict, these rules win over Phase-1 plan code samples. | Writing any Python/Kotlin under `apps/*/src` (domain / application / adapters / composition). |
+| `rules/frontend-code-architecture.md` | FC/IS layer placement, domain purity, generated-Zod boundary + dual-schema, TanStack Query + WebSocket-into-cache, failure taxonomy, UI rules, ubiquitous-language naming, tests, TS strict, CI boundary gates. On conflict, these rules win over Phase-1 plan Section F samples. | Writing any TypeScript/React under `apps/dashboard-react/src` (domain / application / ports / adapters / ui). |
 | `rules/contract-first.md` | Schema-as-SoT direction, allowed generators, codegen drift gates, schema-change commit hygiene. | Touching anything under `packages/contracts/`. |
 | `rules/phase-iteration.md` | Chapter 0 batch ordering; Create / Implementation / Promote / Living-doc task kinds. | Planning, scaffolding, or executing a phase; writing or reviewing a `docs/plans/` plan. |
 
