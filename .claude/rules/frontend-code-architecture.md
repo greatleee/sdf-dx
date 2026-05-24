@@ -1,6 +1,6 @@
 # Frontend Code Architecture — Rules
 
-Fast-scan condensation of `docs/architecture/2026-05-24-frontend-architecture.md` + ADRs 0004 / 0005 / 0007 / 0016 / 0018 / 0022 / 0028 / 0029 / 0030. Covers the React/TypeScript dashboard under `apps/dashboard-react/`.
+Fast-scan condensation of `docs/architecture/2026-05-24-frontend-architecture.md` + ADRs 0004 / 0005 / 0007 / 0016 / 0018 / 0022 / 0028 / 0029 / 0030 / 0031. Covers the React/TypeScript dashboard under `apps/dashboard-react/`.
 
 Rules-only, do/don't form; the arch doc carries the *why*. **On conflict between Phase 1 plan Section F code samples and these rules, these rules win** — ADR-0028 / ADR-0029 supersede the Section F sketch.
 
@@ -153,13 +153,18 @@ DON'T:
 
 ---
 
-## §11. CI gates
+## §11. CI gates + enforcement set (ADR-0031)
 
-- `eslint-plugin-boundaries` element-types: `domain` disallows `application`/`adapters`/`ui`; `application` disallows `adapters`/`ui`. Generated schemas importable in `adapters` only.
-- `@typescript-eslint/no-explicit-any`, `no-floating-promises`, `consistent-type-imports` — error level.
+Authoritative list + rationale: **ADR-0031** (FE analog of backend ADR-0023). This is the do/don't surface.
+
+- **`eslint-plugin-boundaries`** element-types (elements `domain`/`application`/`ports`/`adapters`/`ui`/`shared`): `domain ↛ {adapters, application, ui, ports}`; `shared ↛ {adapters, application, ui, ports, domain}`; `ui ↛ adapters`; `application ↛ {adapters, ui}`. Generated schemas importable in `adapters` only.
+- **Domain/shared purity guards** (FE analog of backend AST A1/A2; scoped to `domain/` + `shared/`): `no-restricted-syntax` bans `Date.now()` / `new Date()` / `Math.random()` / `crypto.randomUUID()` / `await`; `no-restricted-globals` bans `fetch` / `WebSocket` / `localStorage` / `window` / `document` / `navigator`; `@typescript-eslint/no-restricted-imports` bans `zod` / `react` / `@tanstack/react-query` / router·form·store libs. Inject clock/uuid/random; IO lives in `adapters/`.
+- **`@typescript-eslint/switch-exhaustiveness-check`** (exhaustive union switches, §6/§10); **`import/no-cycle`**; **`complexity` ≤ 10** (parity with backend ruff `C90`/mccabe). Plus `no-explicit-any` / `no-floating-promises` / `consistent-type-imports` + `strictTypeChecked`.
+- **Prettier** owns formatting (`printWidth 100`); `eslint-config-prettier` is the last config block — never `eslint-plugin-prettier`. `format:check` is the gate.
+- **Claude Code hook** (`.claude/settings.json` PostToolUse): auto-runs Prettier + ESLint on `apps/dashboard-react/**/*.{ts,tsx}` an agent edits — earliest drift catch; complements (≠ replaces) CI + git pre-commit.
 - Contract **drift gate** (`make all` + `git diff --exit-code codegen/`) covers the generated Zod (contract-first.md §3).
 
-DON'T disable a boundary rule to make code pass. Fix the direction.
+DON'T disable a boundary rule or add an inline `eslint-disable` to make code pass. Fix the direction (ADR-0031 migration path).
 
 ---
 
@@ -177,4 +182,4 @@ Deferred — out of Phase 1; arch §10 + ADR-0030 give the placement:
 
 ---
 
-Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache), ADR-0030 (URL-as-SoT + state split; router/store deferred). Parents: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
+Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache), ADR-0030 (URL-as-SoT + state split; router/store deferred), ADR-0031 (lint enforcement set + LLM-drift guardrails). Parents: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
