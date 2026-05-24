@@ -153,18 +153,14 @@ DON'T:
 
 ---
 
-## §11. CI gates + enforcement set (ADR-0031)
+## §11. CI gates
 
-Authoritative list + rationale: **ADR-0031** (FE analog of backend ADR-0023). This is the do/don't surface.
+The §1/§2/§6/§10 rules are mechanically enforced (ESLint boundaries + domain/shared drift guards), alongside the contract drift gate (contract-first.md §3) and a Claude Code edit-time hook. Gate set + rationale: **ADR-0031**.
 
-- **`eslint-plugin-boundaries`** element-types (elements `domain`/`application`/`ports`/`adapters`/`ui`/`shared`): `domain ↛ {adapters, application, ui, ports}`; `shared ↛ {adapters, application, ui, ports, domain}`; `ui ↛ adapters`; `application ↛ {adapters, ui}`. Generated schemas importable in `adapters` only.
-- **Domain/shared purity guards** (FE analog of backend AST A1/A2; scoped to `domain/` + `shared/`): `no-restricted-syntax` bans `Date.now()` / `new Date()` / `Math.random()` / `crypto.randomUUID()` / `await`; `no-restricted-globals` bans `fetch` / `WebSocket` / `localStorage` / `window` / `document` / `navigator`; `@typescript-eslint/no-restricted-imports` bans `zod` / `react` / `@tanstack/react-query` / router·form·store libs. Inject clock/uuid/random; IO lives in `adapters/`.
-- **`@typescript-eslint/switch-exhaustiveness-check`** (exhaustive union switches, §6/§10); **`import/no-cycle`**; **`complexity` ≤ 10** (parity with backend ruff `C90`/mccabe). Plus `no-explicit-any` / `no-floating-promises` / `consistent-type-imports` + `strictTypeChecked`.
-- **Prettier** owns formatting (`printWidth 100`); `eslint-config-prettier` is the last config block — never `eslint-plugin-prettier`. `format:check` is the gate.
-- **Claude Code hook** (`.claude/settings.json` PostToolUse): auto-runs Prettier + ESLint on `apps/dashboard-react/**/*.{ts,tsx}` an agent edits — earliest drift catch; complements (≠ replaces) CI + git pre-commit.
-- Contract **drift gate** (`make all` + `git diff --exit-code codegen/`) covers the generated Zod (contract-first.md §3).
-
-DON'T disable a boundary rule or add an inline `eslint-disable` to make code pass. Fix the direction (ADR-0031 migration path).
+- Keep cyclomatic complexity ≤ 10.
+- No circular module dependencies.
+- Format with Prettier (`printWidth 100`); never run Prettier as an ESLint rule (`eslint-config-prettier` last, not `eslint-plugin-prettier`).
+- DON'T disable a boundary rule or add an inline `eslint-disable` to make code pass — fix the direction.
 
 ---
 
