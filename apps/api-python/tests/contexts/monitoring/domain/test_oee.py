@@ -106,7 +106,7 @@ def test_availability_is_one_when_apt_equals_pbt(
     good2=st.integers(min_value=0),
     ict=_nonneg_float,
 )
-def test_quality_monotonic_in_good_quantity(  # noqa: PLR0913
+def test_quality_monotonic_in_good_quantity(
     pbt: float,
     apt: float,
     produced: int,
