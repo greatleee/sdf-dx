@@ -111,7 +111,7 @@ export default tseslint.config(
           message: "Domain: inject RandomPort — no Math.random() (§2).",
         },
         {
-          selector: "CallExpression[callee.object.property.name='randomUUID']",
+          selector: "CallExpression[callee.property.name='randomUUID']",
           message: "Domain: inject UUIDPort — no crypto.randomUUID() (§2).",
         },
         {
