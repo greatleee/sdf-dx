@@ -31,7 +31,11 @@ jobs:
       # is an ERR_PNPM_BAD_PM_VERSION hard error.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20" }
+        # @hey-api/openapi-ts 0.97.x is ESM-only and requires Node ≥ 22.13
+        # (ERR_PACKAGE_PATH_NOT_EXPORTED on Node 20). Bumped from 20 when the
+        # ADR-0028 Zod codegen target was added. Pinned exactly (not "22") to
+        # match the determinism stance of every other tool pin in this file.
+        with: { node-version: "22.13.0" }
       - name: Install pinned protoc
         run: |
           curl -sSLo /tmp/protoc.zip \
