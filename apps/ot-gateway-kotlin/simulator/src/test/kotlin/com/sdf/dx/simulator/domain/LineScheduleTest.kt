@@ -1,6 +1,7 @@
 package com.sdf.dx.simulator.domain
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -54,13 +55,21 @@ public class LineScheduleTest {
         assertTrue(LineSchedule.isStopped(101_999L))
     }
 
+    // ── boundary: negative input ───────────────────────────────────────────
+
+    @Test
+    public fun `negative simulated time is treated as running (before first stop)`() {
+        assertFalse(LineSchedule.isStopped(-1L))
+    }
+
     // ── LineModel.tick(0) invariant ────────────────────────────────────────
 
     @Test
-    public fun `tick with 0 ms leaves cycleCount unchanged at 0`() {
-        val model = LineModel.initial("press")
-        val ticked = model.tick(0L)
+    public fun `tick with 0 ms leaves cycleCount unchanged on an already-advanced model`() {
+        val advanced = LineModel.initial("press").tick(1000L)
+        assertEquals(1L, advanced.cycleCount)
 
-        kotlin.test.assertEquals(0L, ticked.cycleCount)
+        val ticked = advanced.tick(0L)
+        assertEquals(1L, ticked.cycleCount)
     }
 }

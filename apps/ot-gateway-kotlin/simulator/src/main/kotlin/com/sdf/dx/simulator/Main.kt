@@ -40,16 +40,16 @@ public fun main(): Unit =
         publisher.publishBirth(MACHINE_TYPES)
         log.info("simulator started edge={} group={} mqtt={}", lineId, groupId, mqttUrl)
 
-        var elapsedMs = 0L
+        var simulatedMs = 0L
         while (true) {
-            val tickMs = if (LineSchedule.isStopped(elapsedMs)) 0L else TICK_INTERVAL_MS
+            val tickMs = if (LineSchedule.isStopped(simulatedMs)) 0L else TICK_INTERVAL_MS
             models =
                 models.map { model ->
                     val ticked = model.tick(tickMs)
                     publisher.publishData(ticked)
                     ticked
                 }
-            elapsedMs += TICK_INTERVAL_MS
+            simulatedMs += TICK_INTERVAL_MS
             delay(TICK_INTERVAL_MS)
         }
     }

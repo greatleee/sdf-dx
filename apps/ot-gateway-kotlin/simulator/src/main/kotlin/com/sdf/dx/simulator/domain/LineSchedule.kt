@@ -3,12 +3,16 @@ package com.sdf.dx.simulator.domain
 /**
  * Pure deterministic idle schedule for the simulated production line.
  *
- * Given accumulated elapsed milliseconds since simulator start, [isStopped] returns
- * whether the line is currently in a synthetic idle window. No clock reads, no IO, no
- * RNG — the function is a pure predicate over the elapsed-time parameter (ADR-0023 K1).
+ * [isStopped] is a pure predicate over **simulated elapsed time** — tick-driven, where
+ * one tick = `TICK_INTERVAL_MS` (1 s). The caller accumulates ticks as
+ * `simulatedMs += TICK_INTERVAL_MS` each loop iteration; this is NOT wall-clock time.
+ * Keeping the schedule tick-driven is essential: idle windows must be aligned to
+ * production cycles, not real elapsed time (ADR-0023 K1 — no clock reads in domain).
  *
- * Schedule: the line runs for the first [FIRST_STOP_OFFSET_MS] ms, then enters a
- * [STOP_DURATION_MS] idle window every [PERIOD_MS]. Approximate uptime: ~80%.
+ * Schedule: the line runs for the first [FIRST_STOP_OFFSET_MS] simulated ms, then
+ * enters a [STOP_DURATION_MS] idle window every [PERIOD_MS]. Steady-state running
+ * window = `PERIOD_MS − STOP_DURATION_MS` = 48 s; ~80% uptime (the first period,
+ * 30 s run + 12 s idle, differs from the steady-state rhythm).
  *
  *   0 ms ──────────── 30 000 ms : RUNNING
  *   30 000 ms ─────── 42 000 ms : IDLE  (first window)
@@ -32,13 +36,14 @@ public object LineSchedule {
     public const val PERIOD_MS: Long = 60_000L
 
     /**
-     * Returns `true` iff the line should be stopped (idle) at [elapsedMs] ms since start.
+     * Returns `true` iff the line should be stopped (idle) at [simulatedMs] simulated
+     * elapsed time (tick-driven; one tick = `TICK_INTERVAL_MS`; not wall-clock).
      *
      * Pure predicate — no side effects, no system reads.
      */
-    public fun isStopped(elapsedMs: Long): Boolean {
-        if (elapsedMs < FIRST_STOP_OFFSET_MS) return false
-        val phaseMs = (elapsedMs - FIRST_STOP_OFFSET_MS) % PERIOD_MS
+    public fun isStopped(simulatedMs: Long): Boolean {
+        if (simulatedMs < FIRST_STOP_OFFSET_MS) return false
+        val phaseMs = (simulatedMs - FIRST_STOP_OFFSET_MS) % PERIOD_MS
         return phaseMs < STOP_DURATION_MS
     }
 }
