@@ -155,7 +155,7 @@ DON'T:
 
 ## §11. CI gates
 
-The §1/§2/§6/§10 rules are mechanically enforced (ESLint boundaries + domain/shared drift guards), alongside the contract drift gate (contract-first.md §3) and a Claude Code edit-time hook. Gate set + rationale: **ADR-0031**.
+The §1/§2/§10 rules are mechanically enforced (ESLint boundaries + domain/shared drift guards), alongside the contract drift gate (contract-first.md §3) and a Claude Code edit-time hook. §6's throw-vs-return split is review-enforced, not lint-enforced. Gate set + rationale: **ADR-0031**.
 
 - Keep cyclomatic complexity ≤ 10.
 - No circular module dependencies.
