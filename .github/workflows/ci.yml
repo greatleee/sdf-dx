@@ -1,4 +1,9 @@
 name: ci
+# Least-privilege GITHUB_TOKEN (zizmor excessive-permissions): every job below only
+# checks out and runs read-only lint / type / test gates — none push, comment, or
+# release. A job that ever needs more must opt in with its own narrower permissions:.
+permissions:
+  contents: read
 on:
   pull_request:
   push:

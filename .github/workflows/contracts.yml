@@ -1,4 +1,9 @@
 name: contracts
+# Least-privilege GITHUB_TOKEN (zizmor excessive-permissions): the single job only
+# checks out and runs read-only gates (spectral lint, codegen drift, oasdiff). It
+# never writes back, so contents: read is sufficient.
+permissions:
+  contents: read
 on:
   pull_request:
     paths:
