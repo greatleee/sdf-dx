@@ -1,6 +1,6 @@
 # Frontend Code Architecture — Rules
 
-Fast-scan condensation of `docs/architecture/2026-05-24-frontend-architecture.md` + ADRs 0004 / 0005 / 0007 / 0016 / 0018 / 0022 / 0028 / 0029 / 0030. Covers the React/TypeScript dashboard under `apps/dashboard-react/`.
+Fast-scan condensation of `docs/architecture/2026-05-24-frontend-architecture.md` + ADRs 0004 / 0005 / 0007 / 0016 / 0018 / 0022 / 0028 / 0029 / 0030 / 0031. Covers the React/TypeScript dashboard under `apps/dashboard-react/`.
 
 Rules-only, do/don't form; the arch doc carries the *why*. **On conflict between Phase 1 plan Section F code samples and these rules, these rules win** — ADR-0028 / ADR-0029 supersede the Section F sketch.
 
@@ -155,11 +155,12 @@ DON'T:
 
 ## §11. CI gates
 
-- `eslint-plugin-boundaries` element-types: `domain` disallows `application`/`adapters`/`ui`; `application` disallows `adapters`/`ui`. Generated schemas importable in `adapters` only.
-- `@typescript-eslint/no-explicit-any`, `no-floating-promises`, `consistent-type-imports` — error level.
-- Contract **drift gate** (`make all` + `git diff --exit-code codegen/`) covers the generated Zod (contract-first.md §3).
+The §1/§2/§10 rules are mechanically enforced (ESLint boundaries + domain/shared drift guards), alongside the contract drift gate (contract-first.md §3) and a Claude Code edit-time hook. §6's throw-vs-return split is review-enforced, not lint-enforced. Gate set + rationale: **ADR-0031**.
 
-DON'T disable a boundary rule to make code pass. Fix the direction.
+- Keep cyclomatic complexity ≤ 10.
+- No circular module dependencies.
+- Format with Prettier (`printWidth 100`); never run Prettier as an ESLint rule (`eslint-config-prettier` last, not `eslint-plugin-prettier`).
+- DON'T disable a boundary rule or add an inline `eslint-disable` to make code pass — fix the direction.
 
 ---
 
@@ -177,4 +178,4 @@ Deferred — out of Phase 1; arch §10 + ADR-0030 give the placement:
 
 ---
 
-Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache), ADR-0030 (URL-as-SoT + state split; router/store deferred). Parents: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
+Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache), ADR-0030 (URL-as-SoT + state split; router/store deferred), ADR-0031 (lint enforcement set + LLM-drift guardrails). Parents: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
