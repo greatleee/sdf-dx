@@ -46,6 +46,8 @@ domain/        Pure functions + plain-TS types. No React. No IO. No Zod.
 
 Dependencies flow down only. `src/app/` is the **composition root** (wires real adapters or fakes into a provider, mounts the live-subscription hook) — it imports every layer and no layer imports it; it is not a layer in the dependency sense. `src/contexts/<bc>/` mirrors the backend's `contexts/<bc>/` split; Phase 1's bounded context is `monitoring`. `ports/` is a folder with one file per feature, mirroring ADR-0022, so the adapter discipline matches the backend's.
 
+The `domain/` layer is also **synchronous** — no `Promise`, no `async`. Awaiting an adapter, sequencing two reads, or racing a timeout is IO orchestration, and it lives in `application/`; the domain receives values that are already resolved. This is the same line the backend draws (a pure core that takes data, not a core that fetches it), and it keeps domain tests free of `await` and fake timers: a rule is a function from inputs to a result, nothing more.
+
 ## §3. The boundary: generated Zod, and why the domain type is separate
 
 Every response crosses two shapes: what the server *promises* over the wire (owned by the contract, `sdf-api.yaml`) and what the frontend *wants to reason about* (owned by the frontend). The backend already split these — generated Pydantic is the boundary DTO, the domain `@dataclass` is separate, and explicit conversion moves data across (ADR-0018, ADR-0005 D-2). The frontend mirrors that split exactly.
@@ -91,3 +93,13 @@ The same costs the backend pays. **Indirection**: a trivial read becomes a domai
 ## §9. What this is not
 
 It is not Clean/Hexagonal/DDD-by-the-book — it borrows FC/IS and ports/adapters and names things by concrete role. It is not anti-React: React renders, and the other layers make decisions and own IO. It is not final — when a convention stops serving the goals above, supersede the relevant ADR and revise this doc.
+
+## §10. Deferred (deliberate boundary)
+
+Phase 1 is a read-mostly, single-`Line` dashboard, so three machineries common to larger frontends are deliberately absent. Naming them as *deferred* rather than leaving them unsaid is the point — it marks where the boundary is and where each lands when it arrives, so the first PR that needs one doesn't reinvent the placement.
+
+- **Forms** (React Hook Form) arrive with the first operator write-action. Form input is an untrusted boundary exactly like the network, so the same boundary discipline applies: its Zod schema lives at the form boundary (`application/` / `adapters/`), **never** in `domain/` — the §3 rule "no Zod in the domain" is a placement rule about *validation*, not about *the network specifically*, and form input is the other place validation belongs. Cross-field business rules beyond mere shape stay pure domain functions, called *after* the parse succeeds.
+- **Client routing / multi-view navigation** arrives with a multi-`Line` picker and per-`Line` detail views. A single `Line` needs no router; adding one before then would be structure without a use.
+- **Optimistic mutations** and **command-as-data** unions arrive when a write action's latency or side-effect set actually warrants them. Phase 1 has no write action whose latency a user would notice, so optimism would be ceremony; §4 says as much ("add optimistic updates unless user-visible latency requires it").
+
+The operational form of this section lives as a short pointer in `.claude/rules/frontend-code-architecture.md` (§"Deferred") — only the one binding rule (form Zod at the form boundary, not the domain) is repeated there.

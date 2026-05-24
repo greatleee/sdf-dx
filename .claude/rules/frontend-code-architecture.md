@@ -2,9 +2,9 @@
 
 Fast-scan condensation of `docs/architecture/2026-05-24-frontend-architecture.md` + ADRs 0004 / 0005 / 0007 / 0016 / 0018 / 0022 / 0028 / 0029. Covers the React/TypeScript dashboard under `apps/dashboard-react/`.
 
-Arch doc carries full rationale; this file is rules-only, do/don't form. **On conflict between Phase 1 plan Section F code samples and these rules, these rules win** — the Section F samples (hand-typed interfaces, `as` casts at the boundary, component-level WebSocket) are superseded by ADR-0028 / ADR-0029.
+Rules-only, do/don't form; the arch doc carries the *why*. **On conflict between Phase 1 plan Section F code samples and these rules, these rules win** — ADR-0028 / ADR-0029 supersede the Section F sketch.
 
-Architecture is **Functional Core / Imperative Shell**, the same as the backend: business logic is pure TypeScript, isolated from React, network, storage, and the clock.
+Architecture is **Functional Core / Imperative Shell**, the same as the backend.
 
 Stack: React 18 + TypeScript strict + Vite + TanStack Query v5 + Tailwind + Recharts + react-i18next + Zod (boundary only) + MSW + Vitest + Playwright + pnpm. Versions pinned in `apps/dashboard-react/package.json`.
 
@@ -33,29 +33,29 @@ BC scope for Phase 1 is `monitoring` (mirrors the backend `contexts/monitoring/`
 ## §2. Domain purity — forbidden imports
 
 MUST NOT import or call inside `src/contexts/*/domain/` or `src/shared/`:
-- `react`, `@tanstack/react-query`, any React Hook Form / router / state-store library.
+- `react`, `@tanstack/react-query`, any form / router / state-store library.
 - `fetch`, `WebSocket`, `localStorage`, `window`, `document`, or any browser API.
-- `zod` — it is a validation library and belongs at the boundary (`adapters/`), mirroring ADR-0018's "no validation lib in domain".
-- `Date.now()`, `new Date()` (no-arg), `Math.random()`, `crypto.randomUUID()` — inject these from the shell.
+- `zod` — boundary only (`adapters/`); it is a validation library (ADR-0018; §3).
+- `Date.now()`, `new Date()` (no-arg), `Math.random()`, `crypto.randomUUID()` — inject from the shell.
 
 MUST in domain:
-- Be pure and **synchronous** — no `Promise`, no `async`. Async orchestration (awaiting adapters, sequencing IO) lives in `application/`; `domain/` receives already-resolved values.
-- Use plain TypeScript `type` / `interface` for domain types; failures returned as discriminated-union **values** (§6), never thrown.
+- Be pure and **synchronous** — no `Promise`, no `async`. Async orchestration lives in `application/`; `domain/` receives already-resolved values.
+- Plain TypeScript `type` / `interface` for domain types; failures returned as discriminated-union **values** (§6), never thrown.
 
 ---
 
 ## §3. Boundary & dual-schema (generated Zod)
 
 DO:
-- Treat the **generated Zod** (emitted from `sdf-api.yaml`, committed under `packages/contracts/codegen/`, drift-gated) as the contract/boundary schema — the FE analog of the generated Pydantic boundary DTO (ADR-0018 / ADR-0005, ADR-0028).
+- Treat the **generated Zod** (emitted from `sdf-api.yaml`, committed under `packages/contracts/codegen/`, drift-gated) as the boundary schema — the FE analog of the generated Pydantic DTO (ADR-0028).
 - In adapters: `Schema.parse(await res.json())` → pure mapper → frontend domain type. A parse failure is a transport failure (throw — §6).
 - Keep the frontend domain type **separate** and plain TypeScript in `domain/`; the mapper is pure, lives in `adapters/`, and is unit-tested.
-- Rename across the seam: wire `snake_case` → domain `camelCase` happens in the mapper.
+- Rename across the seam: wire `snake_case` → domain `camelCase` in the mapper.
 
 DON'T:
 - Import the generated Zod (or generated types) anywhere outside `adapters/`. `ui/` imports domain types only.
 - `(await res.json()) as T` — never cast at the boundary; parse it.
-- Put a Zod schema in `domain/` — runtime validation is boundary-only.
+- Put a Zod schema in `domain/`.
 - Couple domain field names to wire field names.
 
 ---
@@ -78,15 +78,15 @@ DON'T:
 ## §5. WebSocket live updates
 
 DO (ADR-0029):
-- Put the WebSocket behind a `ports/` + `adapters/` boundary; parse each frame through the generated Zod for the shared Line-state component schema and run it through the **same pure mapper as the REST response** — so what lands in the cache is the domain type, identical in shape to what the REST query seeded, **never the raw wire frame**.
-- Subscribe **once** in an `application/` hook mounted high in the tree; write each mapped frame into the REST-seeded cache key — parameterized by identity, `['lineState', lineId]`, and shared verbatim by the REST hook and the WS writer — with `queryClient.setQueryData`.
-- Set `staleTime: Infinity` on the WS-fed query; enable `refetchInterval` polling **only while the socket is down** (mutually exclusive *while connected*). Reconnect is the one allowed overlap — `invalidateQueries` runs a REST refetch while frames may resume; benign because both carry the identical shape (last-write-wins).
+- Put the WebSocket behind a `ports/` + `adapters/` boundary. Parse each frame through the generated Zod for the shared Line-state component, then run it through the **same pure mapper as the REST response** — the cache holds the domain type, **never the raw wire frame**.
+- Subscribe **once** in an `application/` hook mounted high in the tree; write each mapped frame into the REST-seeded key `['lineState', lineId]` via `queryClient.setQueryData`.
+- Set `staleTime: Infinity` on the WS-fed query; enable `refetchInterval` polling **only while the socket is down**.
 - Reconnect with exponential backoff + jitter and an app-level heartbeat; keep the socket in a `ref`; clean up on unmount.
 
 DON'T:
 - Call `new WebSocket` in a component, or merge `live ?? snapshot` in a component.
 - Run `setQueryData` and an active `refetchInterval` at the same time (stale-overwrite race).
-- Use `useSyncExternalStore` for the socket — the Query cache already gives tearing-safe reads.
+- Use `useSyncExternalStore` for the socket.
 
 ---
 
@@ -94,7 +94,7 @@ DON'T:
 
 - **Transport failure** (network, 5xx, Zod parse fail) → adapters **throw**. TanStack Query's `error`, retry, and error boundary handle it.
 - **Domain outcome** (a tagged business result on a 200) → return a discriminated union **value** (error-as-value, ADR-0016); the component switches exhaustively. Unions live in `domain/`.
-- **Never collapse the two.** (Phase 1 is read-mostly, so domain-outcome unions are few — but the split holds for the first write action.)
+- **Never collapse the two.**
 
 ---
 
@@ -130,7 +130,7 @@ DON'T:
 | Adapter | Vitest + MSW | Few per adapter |
 | E2E | Playwright | Few, key flows |
 
-Tier policy mirrors ADR-0006; fakes-not-mocks per ADR-0024; the 1:1 UC↔E2E gate is ADR-0007.
+(Tiering ADR-0006; fakes-not-mocks ADR-0024; 1:1 UC↔E2E gate ADR-0007.)
 
 DO:
 - Domain tests: pass concrete values; assert on return values. No `vi.fn()` / `vi.mock()` / `vi.spyOn()` — if you need one, the function isn't pure.
@@ -157,20 +157,16 @@ DON'T:
 
 - `eslint-plugin-boundaries` element-types: `domain` disallows `application`/`adapters`/`ui`; `application` disallows `adapters`/`ui`. Generated schemas importable in `adapters` only.
 - `@typescript-eslint/no-explicit-any`, `no-floating-promises`, `consistent-type-imports` — error level.
-- Contract **drift gate** (`make all` + `git diff --exit-code codegen/`) covers the generated Zod, same as the other generated artifacts (contract-first.md §3).
+- Contract **drift gate** (`make all` + `git diff --exit-code codegen/`) covers the generated Zod (contract-first.md §3).
 
 DON'T disable a boundary rule to make code pass. Fix the direction.
 
 ---
 
-## Deferred (out of Phase 1 — land when the need arrives)
+## Deferred (out of Phase 1)
 
-- **Forms** (React Hook Form) — arrive with the first operator write-action. Form input is an untrusted boundary like the network, so its Zod schema lives at the form boundary (`application/` / `adapters/`), **not** in `domain/` (§2/§3); cross-field rules beyond shape are pure domain functions called after parse.
-- **Client routing / multi-view navigation** — arrives with a multi-`Line` picker and per-`Line` detail views.
-- **Optimistic mutations** and **command-as-data** unions — arrive when a write action's latency or side-effect set warrants them.
-
-Phase 1 is a read-mostly, single-`Line` dashboard; documenting these as deferred (not absent) marks the boundary deliberately.
+Forms, client routing / multi-view navigation, and optimistic mutations / command-as-data are out of scope for the read-mostly single-`Line` dashboard. Rationale and the placement each takes when it lands are in the arch doc (§10). One rule binds now: a form's Zod schema lives at the form boundary (`application/` / `adapters/`), **never** in `domain/` (§3).
 
 ---
 
-Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache). Parent decisions: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
+Full rationale: `docs/architecture/2026-05-24-frontend-architecture.md`. Decision records: ADR-0028 (FC/IS + generated-Zod boundary), ADR-0029 (live WebSocket → Query cache). Parents: ADR-0004 / 0005 / 0016 / 0018 / 0007 / 0022.
