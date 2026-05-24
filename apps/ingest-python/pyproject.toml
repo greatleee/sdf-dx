@@ -20,6 +20,7 @@ dev = [
   "mypy>=1.11",
   "import-linter>=2.1",
   "testcontainers[postgres,kafka]>=4.8",
+  "pytest-cov>=5.0",
 ]
 
 [build-system]
@@ -61,6 +62,17 @@ addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = ["integration: opt-in via --integration"]
+
+# Coverage is left out of `addopts` so the default test run stays fast and
+# tool-neutral; `scripts/stats.sh` passes `--cov` explicitly. Measured over the
+# unit run only — integration (testcontainers) tests are opt-in, so the adapter
+# code they exercise reads as uncovered here.
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.importlinter]
 root_package = "sdf_ingest"
