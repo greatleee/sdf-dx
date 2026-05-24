@@ -1,6 +1,8 @@
 package com.sdf.dx.simulator.architecture
 
 import com.lemonappdev.konsist.api.Konsist
+import com.lemonappdev.konsist.api.architecture.KoArchitectureCreator.assertArchitecture
+import com.lemonappdev.konsist.api.architecture.Layer
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -59,5 +61,24 @@ public class ArchitectureTest {
                 )
             }
         }
+    }
+
+    @Test
+    public fun `K3 - layer dependency direction (adapters may depend on domain, not vice versa)`() {
+        // ADR-0023 K3 (adapters-no-upward). With only `domain` and `adapters` present today this
+        // primarily encodes "adapters → domain only": `domain.dependsOnNothing()` forbids the
+        // domain from importing the adapter package, and `adapters.dependsOn(domain)` declares the
+        // one allowed direction. Written with `assertArchitecture` so it stays correct as the
+        // `ports` / `application` layers are introduced — add them as `Layer`s and the same
+        // direction holds without rewriting the check.
+        Konsist
+            .scopeFromModule("simulator", "main")
+            .assertArchitecture {
+                val domain = Layer("Domain", "com.sdf.dx.simulator.domain..")
+                val adapters = Layer("Adapters", "com.sdf.dx.simulator.adapters..")
+
+                domain.dependsOnNothing()
+                adapters.dependsOn(domain)
+            }
     }
 }

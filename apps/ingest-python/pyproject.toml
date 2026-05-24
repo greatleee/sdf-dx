@@ -36,17 +36,38 @@ target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "C90", "S", "PLC", "PLE", "PLR", "RUF", "ASYNC"]
+# SLF — flake8-self: private-member access across a class boundary (SLF001).
+# PGH — PGH004 blanket-noqa; RUF100 (unused-noqa) already active via RUF.
+select = ["E", "F", "W", "I", "B", "C90", "S", "PLC", "PLE", "PLR", "SLF", "PGH", "RUF", "ASYNC"]
 ignore = ["S101"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S", "PLR2004"]
+"tests/**" = ["S", "PLR2004", "SLF001"]  # test fakes legitimately poke internals
+
+# Explicit complexity ceilings — keep the mccabe/pylint thresholds visible rather
+# than relying on tool defaults. Deliberately generous: aligned with the Kotlin
+# detekt CyclomaticComplexMethod threshold so clean FC/IS code is not flagged.
+[tool.ruff.lint.mccabe]
+max-complexity = 12  # align with Kotlin detekt CyclomaticComplexMethod threshold
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-branches = 12
+max-returns = 6
+max-statements = 50
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
 disallow_any_explicit = true
+disallow_any_decorated = true
+warn_return_any = true
 warn_unreachable = true
+# Suppression discipline: a bare `# type: ignore` must carry a code, and a stale
+# ignore (no longer suppressing anything) is an error — keeps drift-prone inline
+# silencing honest, mirroring the ruff PGH004/RUF100 bans.
+warn_unused_ignores = true
+enable_error_code = ["ignore-without-code"]
 mypy_path = "src"
 packages = ["sdf_ingest"]
 

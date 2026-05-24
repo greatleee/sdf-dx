@@ -209,7 +209,7 @@ DO NOT USE (as code identifiers or filenames):
 
 ---
 
-## §12. CI gates (single source: ADR-0023)
+## §12. CI gates (single source: ADR-0023; extended by ADR-0032)
 
 Python `import-linter` contracts (full list in ADR-0023):
 1. `domain-no-system-reads`
@@ -221,18 +221,31 @@ Python `import-linter` contracts (full list in ADR-0023):
 7. `composition-only-imports-adapters`
 
 Kotlin Konsist:
-- K1 (domain-no-system-reads), K2 (domain-no-persistence), K3 (adapters-no-upward — activates at Phase 1 Task 4).
+- K1 (domain-no-system-reads), K2 (domain-no-persistence), K3 (adapters-no-upward, ADR-0032).
 
 Custom AST checks (`tests/architecture/`):
 - A1 — `datetime.now(` / `datetime.utcnow(` / `time.time(` call-site in domain.
 - A2 — `uuid.uuid4(` / `uuid.uuid1(` call-site in domain.
 - A3 — `uow.session` access outside `composition.py` (ADR-0020 escape-hatch enforcement).
 
+Added by ADR-0032:
+- Suppression — ruff `PGH004` + `RUF100`; mypy `warn_unused_ignores` + `enable_error_code=["ignore-without-code"]`; detekt `ForbiddenSuppress` + `ForbiddenComment` (`TODO` / `FIXME` / `STOPSHIP`); `scripts/check-domain-no-suppress.py` (no inline `# noqa` / `# type: ignore` under `*/src/**/domain/` or `shared_kernel/`).
+- Complexity — ruff mccabe `max-complexity=12` + pylint `max-args/branches/returns/statements`; detekt `NestedBlockDepth` / `LongParameterList` / `ThrowsCount`.
+- Private-member leak — ruff `SLF001` (`tests/**` exempt).
+- Kotlin domain-purity — detekt `ForbiddenImport` + `ForbiddenMethodCall`, `includes: ['**/domain/**']`.
+- Formatter — `apps/ot-gateway-kotlin/.editorconfig` line length 120.
+- Edit-time hook — `.claude/hooks/lint-on-edit.sh` (registered in `.claude/settings.json`), per-folder self-only.
+
 mypy strict / detekt / ktlint — no opt-outs.
 
-If your code adds a new domain module: mirror the lint contracts.
-DO NOT disable a contract to make code pass. Fix the code.
+DO:
+- Mirror the lint contracts when adding a new domain module.
+- Add a new forbidden API to BOTH `detekt.yml` and the Konsist test.
+- Run `detektMain detektTest` (not `detekt`) in CI.
+
+DON'T:
+- Disable a contract to make code pass. Fix the code.
 
 ---
 
-Full rationale: `docs/architecture/2026-05-23-code-architecture.md`. Decision records: `docs/ADR/0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024`. Reference impl: kept locally (memory `reference-codebase`).
+Full rationale: `docs/architecture/2026-05-23-code-architecture.md`. Decision records: `docs/ADR/0004 / 0009 / 0016 / 0017 / 0018 / 0019 / 0020 / 0021 / 0022 / 0023 / 0024 / 0032`. Reference impl: kept locally (memory `reference-codebase`).
