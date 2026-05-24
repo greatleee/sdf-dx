@@ -1,7 +1,7 @@
 ---
 id: UC-001
 title: Operator monitors single line state
-status: draft
+status: implemented
 phase: 1
 primary_actor: A-OP
 secondary_actors:
@@ -93,5 +93,5 @@ Feature: Operator monitors single line state
 
 ## Open questions
 
-- Authoritative source of `line_state` rows in Phase 1 is undecided: option A is a derived projection from `machine_telemetry` computed inside S-API and written back to `line_state`; option B is a Kafka-side stream processor that maintains `line_state` directly. The Phase 1 plan currently leaves this implicit and must resolve before this UC moves to `status: implemented`. Decision should be captured as an ADR.
+- **[RESOLVED — Section E]** Authoritative source of `line_state` rows. Of the two options (A: a projection computed inside S-API and written back to `line_state`; B: a Kafka-side consumer that maintains `line_state` directly), Phase 1 implements **option B**: the ingest service derives a *coarse* line state from telemetry (`apps/ingest-python/src/sdf_ingest/domain/line_activity.py` — a machine whose `cycle_count` advanced is producing; the line is `RUNNING` if any machine is, else `IDLE`) and writes one row per transition. This keeps S-API read-only. `DOWN` / `CHANGEOVER` are not derivable from counts and are deliberately never emitted; the Phase-1 simulator injects a deterministic synthetic idle schedule (`LineSchedule`, Section G) so the path demonstrably transitions `RUNNING`↔`IDLE`. This is an honest Phase-1 heuristic, not modeled downtime — see `KNOWN-UNKNOWNS.md` ("OEE & line-state derivation"), which holds the Section-E living-doc record of this decision. Promoting that record to a standalone ADR, and adding a dedicated line-state producer (operator input / PLC state word), remain deferred follow-up work.
 - Polling fallback cadence (2 s) is a guess — should be revisited against operator-perceived latency once the Phase 1 system is observable.

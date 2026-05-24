@@ -12,6 +12,11 @@ dist/
 .vite/
 .turbo/
 
+# Playwright (E2E run artifacts)
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Python
 __pycache__/
 *.pyc

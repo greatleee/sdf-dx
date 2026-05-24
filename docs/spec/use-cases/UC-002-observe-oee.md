@@ -1,7 +1,7 @@
 ---
 id: UC-002
 title: Operator observes OEE refresh
-status: draft
+status: implemented
 phase: 1
 primary_actor: A-OP
 secondary_actors:
