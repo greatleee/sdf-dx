@@ -57,9 +57,9 @@ wire JSON ──parse(generatedZod)──▶ contract value ──pure mapper─
                   (in adapters/)                      (in adapters/)        (in domain/)
 ```
 
-Two deliberate choices, both inherited from ADR-0018:
+Two deliberate choices — the first a direct mirror of ADR-0018, the second its FE-specific consequence:
 
-- **The domain type is separate and plain TypeScript — no Zod in `domain/`.** Zod is a validation library; the backend keeps validation libraries (Pydantic) at the boundary and lets the domain be plain data reached by explicit conversion. The frontend does the same: runtime validation happens once, at the seam; the mapper (the `to_domain` analog) narrows and renames in plain code and is unit-tested. A hand-written "domain Zod" would be a second validator the drift gate doesn't cover — exactly the thing generating from the spec avoids.
+- **The domain type is separate and plain TypeScript — no Zod in `domain/`.** Zod is a validation library; the backend keeps validation libraries (Pydantic) at the boundary and lets the domain be plain data reached by explicit conversion. The frontend does the same: runtime validation happens once, at the seam; the mapper (the `to_domain` analog) narrows and renames in plain code and is unit-tested. A hand-written "domain Zod" would be a second validator the drift gate doesn't cover — exactly the thing generating from the spec avoids — and after a pure mapper has already produced a typed value, re-validating it is redundant. (A mapper bug that yields a type-valid-but-wrong value is a logic error caught by the mapper's unit tests, not something a domain Zod would catch anyway.)
 - **`ui/` imports domain types only.** A wire rename or a widened enum stops at the adapter; it never propagates into components that have no business knowing the wire shape.
 
 Phase 1's mappers are near-identity (rename-only) because the dashboard's mental model and the wire shape nearly coincide. We keep the split anyway — the same "keep it even when trivial" stance the backend takes — so that drift is caught and the first genuinely-derived view (a composed or relabelled shape) has somewhere to live.

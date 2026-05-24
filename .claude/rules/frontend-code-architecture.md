@@ -39,7 +39,7 @@ MUST NOT import or call inside `src/contexts/*/domain/` or `src/shared/`:
 - `Date.now()`, `new Date()` (no-arg), `Math.random()`, `crypto.randomUUID()` — inject these from the shell.
 
 MUST in domain:
-- Be pure and **synchronous** — no `Promise`, no `async`.
+- Be pure and **synchronous** — no `Promise`, no `async`. Async orchestration (awaiting adapters, sequencing IO) lives in `application/`; `domain/` receives already-resolved values.
 - Use plain TypeScript `type` / `interface` for domain types; failures returned as discriminated-union **values** (§6), never thrown.
 
 ---
@@ -78,10 +78,10 @@ DON'T:
 ## §5. WebSocket live updates
 
 DO (ADR-0029):
-- Put the WebSocket behind a `ports/` + `adapters/` boundary; parse each frame through the generated Zod, like REST.
-- Subscribe **once** in an `application/` hook mounted high in the tree; write each full-shape frame into the REST-seeded cache key with `queryClient.setQueryData`.
-- Set `staleTime: Infinity` on the WS-fed query; enable `refetchInterval` polling **only while the socket is down** (mutually exclusive channels).
-- Reconnect with exponential backoff + jitter and an app-level heartbeat; keep the socket in a `ref`; clean up on unmount; `invalidateQueries` on reconnect.
+- Put the WebSocket behind a `ports/` + `adapters/` boundary; parse each frame through the generated Zod for the shared Line-state component schema and run it through the **same pure mapper as the REST response** — so what lands in the cache is the domain type, identical in shape to what the REST query seeded, **never the raw wire frame**.
+- Subscribe **once** in an `application/` hook mounted high in the tree; write each mapped frame into the REST-seeded cache key — parameterized by identity, `['lineState', lineId]`, and shared verbatim by the REST hook and the WS writer — with `queryClient.setQueryData`.
+- Set `staleTime: Infinity` on the WS-fed query; enable `refetchInterval` polling **only while the socket is down** (mutually exclusive *while connected*). Reconnect is the one allowed overlap — `invalidateQueries` runs a REST refetch while frames may resume; benign because both carry the identical shape (last-write-wins).
+- Reconnect with exponential backoff + jitter and an app-level heartbeat; keep the socket in a `ref`; clean up on unmount.
 
 DON'T:
 - Call `new WebSocket` in a component, or merge `live ?? snapshot` in a component.
@@ -130,6 +130,8 @@ DON'T:
 | Adapter | Vitest + MSW | Few per adapter |
 | E2E | Playwright | Few, key flows |
 
+Tier policy mirrors ADR-0006; fakes-not-mocks per ADR-0024; the 1:1 UC↔E2E gate is ADR-0007.
+
 DO:
 - Domain tests: pass concrete values; assert on return values. No `vi.fn()` / `vi.mock()` / `vi.spyOn()` — if you need one, the function isn't pure.
 - Application tests: inject in-memory **fakes** (working port implementations, not stubs); assert on observable state / query data, never on call patterns.
@@ -163,7 +165,7 @@ DON'T disable a boundary rule to make code pass. Fix the direction.
 
 ## Deferred (out of Phase 1 — land when the need arrives)
 
-- **Forms** (React Hook Form + Zod schema in `domain/`) — arrive with the first operator write-action.
+- **Forms** (React Hook Form) — arrive with the first operator write-action. Form input is an untrusted boundary like the network, so its Zod schema lives at the form boundary (`application/` / `adapters/`), **not** in `domain/` (§2/§3); cross-field rules beyond shape are pure domain functions called after parse.
 - **Client routing / multi-view navigation** — arrives with a multi-`Line` picker and per-`Line` detail views.
 - **Optimistic mutations** and **command-as-data** unions — arrive when a write action's latency or side-effect set warrants them.
 

@@ -29,6 +29,7 @@ The network boundary is validated at runtime by **generated Zod schemas**: `pack
 ### Negative / Trade-offs
 - Adds a second OpenAPI generator and a `zod` runtime dependency to the dashboard. `@hey-api/openapi-ts` 0.97.x is ESM-only and its zod plugin defaults to Zod v4 — pinned and invoked via the Makefile.
 - Each concept has two shapes on the frontend too (generated contract Zod + frontend domain type) with a mapper between. Phase 1 mappers are near-identity (rename-only); the ceremony is paid up front for drift-catching and future divergence — the same trade the backend accepts under ADR-0018.
+- The mapper is the only wire→domain transform without a runtime guard: a bug that produces a type-valid-but-wrong domain value (e.g. a field swap) is caught by the mandated mapper unit tests + adapter MSW tests (`frontend-code-architecture.md` §3 / §9), not at runtime. This is the deliberate FC/IS trade — mapper correctness is a test concern, not a type-guard concern. (A hand-written domain Zod would not catch a same-typed field swap either, and would be the one boundary schema outside the drift gate — so "no Zod in domain" is the ADR-0018 placement *and* an FE-specific call that post-mapper re-validation is redundant.)
 - Supersedes the Phase 1 plan's Section F code samples (hand-typed interfaces, `as` casts, unused client). On conflict, `frontend-code-architecture.md` wins.
 
 ## Migration Path
