@@ -9,6 +9,10 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1" apply false
     id("org.springframework.boot") version "3.3.4" apply false
     id("io.spring.dependency-management") version "1.1.6" apply false
+    // Coverage. Kover instruments JVM bytecode, so it is insensitive to the detekt/Kotlin
+    // skew that pins the compiler above. Applied to the root for cross-module aggregation
+    // (see the `kover(project(...))` dependencies at the foot of this file).
+    id("org.jetbrains.kotlinx.kover") version "0.8.3"
 }
 
 allprojects {
@@ -21,6 +25,7 @@ subprojects {
     apply(plugin = "io.gitlab.arturbosch.detekt")
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
     apply(plugin = "org.jetbrains.kotlin.jvm")
+    apply(plugin = "org.jetbrains.kotlinx.kover")
 
     extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
         buildUponDefaultConfig = true
@@ -34,4 +39,12 @@ subprojects {
             freeCompilerArgs.addAll("-Xjsr305=strict", "-Xexplicit-api=strict")
         }
     }
+}
+
+// Aggregate coverage across the modules that carry production code. `gateway` is an empty
+// scaffold (no src/main) and is deliberately omitted so it cannot dilute the ratio.
+// `./gradlew koverXmlReport` writes build/reports/kover/report.xml; `koverLog` prints the total.
+dependencies {
+    kover(project(":simulator"))
+    kover(project(":bridge"))
 }

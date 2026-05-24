@@ -79,6 +79,18 @@ markers = [
   "integration: testcontainers-backed; opt-in via --integration",
 ]
 
+# Coverage is left out of `addopts` so the default test run stays fast and
+# tool-neutral; `scripts/stats.sh` passes `--cov` explicitly. Measured over the
+# unit run only — integration (testcontainers) tests are opt-in, so the adapter
+# code they exercise reads as uncovered here. The functional core is the figure
+# that matters.
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+
 # Architectural enforcement — single source of truth is ADR-0023.
 # Only the contracts whose source modules exist as of Section D (domain) are
 # active here; adapters/use-case/composition contracts (ADR-0023 #4, #6, #7)
