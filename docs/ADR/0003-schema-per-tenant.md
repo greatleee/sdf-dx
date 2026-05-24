@@ -1,8 +1,10 @@
 # ADR-0003: Schema-per-tenant isolation
 
-- **Status:** accepted
+- **Status:** accepted — metadata-placement & single-transaction-sequence clauses partially superseded by [ADR-0035](0035-multi-schema-persistence-and-tenant-data-isolation.md)
 - **Date:** 2026-05-23
 - **Phase:** 1 (decision lands now); 2 (onboarding implemented)
+
+> **Pointer (Phase 2, ADR-0035):** the "shared relational metadata in `public`" clause and the "all in one transactional sequence" onboarding wording below are superseded by [ADR-0035](0035-multi-schema-persistence-and-tenant-data-isolation.md) — `factory`/`production_line`/`machine` are now per-tenant and onboarding is idempotent/rerunnable, not atomic. The schema-per-tenant core and RLS rejection here stand unchanged.
 
 ## Context
 
