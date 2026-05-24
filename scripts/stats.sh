@@ -34,7 +34,7 @@ loc() { # <ext> <path-filter...>
   find apps packages -name "*.$ext" \
     -not -path '*/.venv/*' -not -path '*/build/*' -not -path '*/.gradle/*' \
     -not -path '*/node_modules/*' -not -path '*/__pycache__/*' -not -path '*/codegen/*' \
-    "$@" 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1+0}'
+    "$@" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1+0}'
 }
 
 PY_SRC=$(loc py -path '*/src/*'); PY_TEST=$(loc py -path '*/tests/*'); PY_TOTAL=$((PY_SRC + PY_TEST))
