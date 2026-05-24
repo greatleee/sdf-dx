@@ -15,9 +15,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ingest-python joins this matrix once Task 18 lands real code + tests;
-        # api-python (Section D functional core) is the only Python app with source today.
-        app: [api-python]
+        # Both Python apps now have source (api-python = Section D core + Section E
+        # read API; ingest-python = Section E Task 18 pipeline).
+        app: [api-python, ingest-python]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v8.1.0
@@ -26,6 +26,10 @@ jobs:
           enable-cache: true
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      # Generated contract DTOs the apps import (ADR-0027); install before the app
+      # since it is wired as an editable local package, not a declared dependency.
+      - name: Install generated contracts package (sdf_contracts)
+        run: uv pip install --system -e packages/contracts/codegen/python
       - name: Install app + dev deps
         working-directory: apps/${{ matrix.app }}
         run: uv pip install --system -e ".[dev]"

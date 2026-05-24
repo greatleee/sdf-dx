@@ -27,6 +27,11 @@ for app in apps/api-python apps/ingest-python; do
     # Pin 3.12 to match the project target (mypy/ruff target-version, CI), not
     # the machine's default interpreter.
     [ -d .venv ] || uv venv --python 3.12
+    # Generated contract DTOs (sdf-contracts) — a monorepo-internal package the
+    # apps import instead of hand-writing boundary models (contract-first §2).
+    # Installed explicitly (not as a [project] dep) because `uv pip install` does
+    # not read [tool.uv.sources], so a declared PyPI lookup would fail.
+    uv pip install -e "$ROOT/packages/contracts/codegen/python"
     uv pip install -e ".[dev]" )
 done
 
