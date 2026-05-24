@@ -22,6 +22,9 @@ export default tseslint.config(
       },
     },
     settings: {
+      // src/App.tsx and src/main.tsx are composition roots — intentionally NOT
+      // registered as boundary elements; element-types leaves them unconstrained
+      // so they can wire adapters → application → ui and own DI (§1).
       "boundaries/elements": [
         { type: "domain", pattern: "src/contexts/*/domain/**" },
         { type: "application", pattern: "src/contexts/*/application/**" },
@@ -72,7 +75,7 @@ export default tseslint.config(
       // Cyclomatic complexity — mirrors backend ruff C90 (mccabe) default threshold of 10
       complexity: ["error", 10],
       // Circular-dependency guard (boundaries does NOT detect cycles)
-      "import/no-cycle": ["error", { maxDepth: 5, ignoreExternal: true }],
+      "import/no-cycle": ["error", { maxDepth: Infinity, ignoreExternal: true }],
       "import/no-internal-modules": [
         "error",
         {
@@ -81,7 +84,7 @@ export default tseslint.config(
             "@/contexts/*/index.ts",
             "@/contexts/*/ports/*",
             // UI layer components (imports resolved from src/ui/)
-            "@/ui/*",
+            "@/ui/**",
             // Internal testing helpers
             "**/testing/**",
             // Well-known package sub-paths
@@ -164,6 +167,7 @@ export default tseslint.config(
   {
     files: ["src/contexts/*/application/**/*.{ts,tsx}"],
     rules: {
+      // Turn off the plain rule; the TS-aware rule below governs via pattern.regex
       "no-restricted-imports": "off",
       "@typescript-eslint/no-restricted-imports": [
         "error",
