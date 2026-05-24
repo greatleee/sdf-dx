@@ -48,6 +48,8 @@ export default tseslint.config(
           rules: [
             // domain is the bottom — must not import anything above it, including ports
             { from: "domain", disallow: ["adapters", "application", "ui", "ports"] },
+            // ports define contracts over domain; must not depend upward (§1)
+            { from: "ports", disallow: ["adapters", "application", "ui"] },
             // shared = cross-cutting pure values; domain-purity applies (§2)
             { from: "shared", disallow: ["adapters", "application", "ui", "ports", "domain"] },
             // application must go through ports interfaces, never directly to adapters or ui (§1/§4)
