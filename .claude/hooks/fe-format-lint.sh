@@ -5,8 +5,8 @@
 #
 # Wired in .claude/settings.json (PostToolUse, matcher Edit|Write|MultiEdit).
 # Reads the hook JSON on stdin; needs `jq` + the dashboard's node_modules.
-# Exit 0 = clean / skipped; exit 2 = ESLint issues remain after --fix (stderr is
-# fed back to the agent so it self-corrects in the same turn).
+# Exit 0 = clean / skipped; exit 2 = Prettier failed or ESLint issues remain
+# after --fix (stderr is fed back to the agent so it self-corrects same turn).
 set -euo pipefail
 
 payload=$(cat)
@@ -31,8 +31,16 @@ fi
 
 cd "$dash"
 
-# Format always (Prettier owns formatting; --write is idempotent).
-pnpm exec prettier --write "$file" >/dev/null 2>&1 || true
+# Format always (Prettier owns formatting; --write is idempotent). Surface
+# Prettier failures (parse/config errors) instead of letting the hook claim
+# success while formatting silently didn't run (PR #18 review).
+if ! prettier_report=$(pnpm exec prettier --write "$file" 2>&1); then
+  {
+    echo "[fe-hook] Prettier failed on $file (format drift not fixed):"
+    echo "$prettier_report"
+  } >&2
+  exit 2
+fi
 
 # Lint only source TS/TSX — the flat config scopes rules to src/**; CSS is format-only.
 case "$file" in
