@@ -21,6 +21,9 @@ __pycache__/
 .ruff_cache/
 htmlcov/
 .coverage
+# Deps are installed via `uv pip install` (see scripts/init.sh); lockfiles are
+# deliberately not tracked. Ignored so a stray `uv run`/`uv sync` can't commit one.
+uv.lock
 
 # Kotlin / Gradle
 .gradle/

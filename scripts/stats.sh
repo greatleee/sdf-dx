@@ -7,8 +7,10 @@
 # the imperative shell (MQTT / Kafka / Spring / FastAPI adapters) is exercised by
 # opt-in testcontainers integration tests, not the unit run measured here.
 #
-# Prereqs: `bash scripts/init.sh` first (per-app .venv + Kotlin toolchain). Needs
-# `uv`, a JDK 21, and `python3` on PATH. Unit run only — no Docker required.
+# Prereqs: `bash scripts/init.sh` first (per-app .venv + Kotlin toolchain). Needs a
+# JDK 21 and `python3` on PATH; the coverage step runs each app's own .venv/bin/pytest
+# (not `uv run`, which would write a stray uv.lock the repo deliberately doesn't track).
+# Unit run only — no Docker required.
 #
 # Usage:
 #   bash scripts/stats.sh            # print the metrics block to stdout
@@ -44,7 +46,9 @@ KT_SRC=$(loc kt -path '*/src/main/*'); KT_TEST=$(loc kt -path '*/src/test/*'); K
 py_cov() { # <app-dir> -> "<overall> <core>"
   local app="$1" json
   json="$(mktemp)"
-  ( cd "$app" && uv run pytest --cov=src --cov-report="json:$json" -q >/dev/null 2>&1 ) || { echo "n/a n/a"; rm -f "$json"; return; }
+  # Invoke the venv's pytest directly (not `uv run`, which would sync + write a
+  # uv.lock); init.sh guarantees the .venv exists with deps + sdf_contracts.
+  ( cd "$app" && ./.venv/bin/pytest --cov=src --cov-report="json:$json" -q >/dev/null 2>&1 ) || { echo "n/a n/a"; rm -f "$json"; return; }
   python3 - "$json" <<'PY'
 import json, re, sys
 data = json.load(open(sys.argv[1]))
