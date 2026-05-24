@@ -67,6 +67,32 @@ describe("HttpMonitoringReader", () => {
       ),
     );
     const reader = new HttpMonitoringReader(ORIGIN);
-    await expect(reader.readOee(LINE, "5m")).resolves.toMatchObject({ oee: 0.8, window: "5m" });
+    await expect(reader.readOee(LINE, "5m")).resolves.toEqual({
+      lineId: LINE,
+      window: "5m",
+      oee: 0.8,
+      availability: 0.9,
+      performance: 0.95,
+      quality: 0.93,
+      observedAt: "2026-05-22T00:00:00Z",
+    });
+  });
+
+  it("throws on a non-2xx oee response (same transport path as readLineState, §6)", async () => {
+    server.use(
+      http.get("*/api/v1/lines/:lineId/oee", () => new HttpResponse(null, { status: 503 })),
+    );
+    const reader = new HttpMonitoringReader(ORIGIN);
+    await expect(reader.readOee(LINE, "5m")).rejects.toThrow(/HTTP 503/);
+  });
+
+  it("throws when the oee response violates the contract (boundary parse failure, §6)", async () => {
+    server.use(
+      http.get("*/api/v1/lines/:lineId/oee", () =>
+        HttpResponse.json({ lineId: LINE, window: "5m", oee: 2, availability: 0.9 }),
+      ),
+    );
+    const reader = new HttpMonitoringReader(ORIGIN);
+    await expect(reader.readOee(LINE, "5m")).rejects.toThrow();
   });
 });

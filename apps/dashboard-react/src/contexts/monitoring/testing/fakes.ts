@@ -21,18 +21,29 @@ const DEFAULT_OEE: OeeReading = {
   observedAt: "2026-05-22T00:00:00Z",
 };
 
-/** In-memory reader returning seeded values; no IO. Satisfies both read ports. */
+/**
+ * In-memory reader; no IO. Satisfies both read ports. Rejects a `lineId`/`window` it has no seed
+ * for, mirroring the real adapter's 404 → throw (ADR-0024: a fake fails the same inputs the real
+ * one does, so a wrong-id/window wiring bug surfaces in a test instead of silently passing).
+ * `state` is mutable so a polling test can change the backing value between refetches.
+ */
 class FakeMonitoringReader implements LineStateReader, OeeReader {
   constructor(
-    private readonly state: LineStateSnapshot,
-    private readonly oee: OeeReading,
+    public state: LineStateSnapshot,
+    public oee: OeeReading,
   ) {}
 
-  readLineState(): Promise<LineStateSnapshot> {
+  readLineState(lineId: string): Promise<LineStateSnapshot> {
+    if (lineId !== this.state.lineId) {
+      return Promise.reject(new Error(`no line-state seed for lineId=${lineId}`));
+    }
     return Promise.resolve(this.state);
   }
 
-  readOee(): Promise<OeeReading> {
+  readOee(lineId: string, window: OeeReading["window"]): Promise<OeeReading> {
+    if (lineId !== this.oee.lineId || window !== this.oee.window) {
+      return Promise.reject(new Error(`no oee seed for lineId=${lineId}, window=${window}`));
+    }
     return Promise.resolve(this.oee);
   }
 }
@@ -63,6 +74,8 @@ export class FakeLineStateFeed implements LineStateFeed {
 
 export interface FakeMonitoringAdapters extends MonitoringAdapters {
   feed: FakeLineStateFeed;
+  /** Replace the seeded Line state so a polling refetch observes a new value (tests). */
+  setLineState: (snapshot: LineStateSnapshot) => void;
 }
 
 /** A working in-memory MonitoringAdapters for application-layer tests (fakes, not mocks, §9). */
@@ -72,5 +85,13 @@ export function createFakeMonitoringAdapters(seed?: {
 }): FakeMonitoringAdapters {
   const feed = new FakeLineStateFeed();
   const reader = new FakeMonitoringReader(seed?.state ?? DEFAULT_STATE, seed?.oee ?? DEFAULT_OEE);
-  return { lineStateReader: reader, oeeReader: reader, lineStateFeed: feed, feed };
+  return {
+    lineStateReader: reader,
+    oeeReader: reader,
+    lineStateFeed: feed,
+    feed,
+    setLineState: (snapshot) => {
+      reader.state = snapshot;
+    },
+  };
 }
