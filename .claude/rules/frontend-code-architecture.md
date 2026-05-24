@@ -22,7 +22,7 @@ DO:
 - Composition / DI wiring (real adapters vs fakes, providers) → `src/app/` + `src/main.tsx`.
 
 DON'T:
-- Import from a higher layer. Dependencies flow down only: `ui → application → ports/adapters → domain`.
+- Import from a higher layer. Dependencies flow down only: `ui → application → ports → domain` — `adapters` implement `ports` (and depend on `ports`/`domain`), wired in `app/`, **never imported by `application` or `ui`** (§11).
 - Silence `eslint-plugin-boundaries`. Restructure to the correct direction instead.
 - Put business rules anywhere above `domain/`.
 

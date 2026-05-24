@@ -16,7 +16,7 @@
 ## TL;DR (rule cheatsheet)
 
 1. **FC/IS, same as the backend** — pure `domain/`, IO at the shell. Business logic is plain TypeScript React can't reach.
-2. **Layers**: `ui → application → ports/adapters → domain`, dependencies down only, enforced by `eslint-plugin-boundaries`.
+2. **Layers**: `ui → application → ports → domain`, dependencies down only (adapters implement ports and are wired at the composition root, never imported by `application`/`ui`), enforced by `eslint-plugin-boundaries`.
 3. **Domain is pure + synchronous** — no React, no IO, no `zod`, no clock/uuid/random reads. Inject those.
 4. **Boundary = generated Zod.** Adapters parse untrusted responses through the generated contract schema, then map to a separate plain-TS domain type. Mirrors ADR-0018 (boundary type ≠ domain type).
 5. **`ui/` never imports generated schemas** — domain types only.
@@ -44,7 +44,7 @@ adapters/      Real implementations + in-memory fakes. Parse at the boundary.
 domain/        Pure functions + plain-TS types. No React. No IO. No Zod.
 ```
 
-Dependencies flow down only. `src/app/` is the **composition root** (wires real adapters or fakes into a provider, mounts the live-subscription hook) — it imports every layer and no layer imports it; it is not a layer in the dependency sense. `src/contexts/<bc>/` mirrors the backend's `contexts/<bc>/` split; Phase 1's bounded context is `monitoring`. `ports/` is a folder with one file per feature, mirroring ADR-0022, so the adapter discipline matches the backend's.
+Dependencies flow down only — and `ports`/`adapters` are siblings, not a chain: `application` imports `ports` (the interfaces), never `adapters`; `adapters` *implement* those `ports` (depending on `ports`/`domain`) and are wired into providers at the composition root. `src/app/` is that **composition root** (wires real adapters or fakes into a provider, mounts the live-subscription hook) — it imports every layer and no layer imports it; it is not a layer in the dependency sense. `src/contexts/<bc>/` mirrors the backend's `contexts/<bc>/` split; Phase 1's bounded context is `monitoring`. `ports/` is a folder with one file per feature, mirroring ADR-0022, so the adapter discipline matches the backend's.
 
 The `domain/` layer is also **synchronous** — no `Promise`, no `async`. Awaiting an adapter, sequencing two reads, or racing a timeout is IO orchestration, and it lives in `application/`; the domain receives values that are already resolved. This is the same line the backend draws (a pure core that takes data, not a core that fetches it), and it keeps domain tests free of `await` and fake timers: a rule is a function from inputs to a result, nothing more.
 
