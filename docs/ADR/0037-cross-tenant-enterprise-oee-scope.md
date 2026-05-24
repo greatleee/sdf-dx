@@ -12,7 +12,7 @@ There is no shared `tenant_id` column to group on — per ADR-0035 every `Factor
 
 ## Decision
 
-Ship a **thin** cross-tenant `EnterpriseOEE` query as a single cross-BC use case in `src/sdf_api/use_cases/`. It reads each member tenant's per-tenant OEE CAGG — each now a schema-local join (ADR-0035) — through an OEE reader **port**; the reader **adapter** performs the `UNION ALL` over the caller's member tenants' schemas and returns a `list[per-tenant OEE]`. Averaging across that list is **pure** domain/use-case logic, asserted on the read model with per-BC in-memory datasets (never a shared dataset across BCs).
+Ship a **thin** cross-tenant `EnterpriseOEE` query as a single cross-BC use case in `src/sdf_api/use_cases/`. It reads each member tenant's per-tenant OEE CAGG — each now a schema-local join (ADR-0035) — through an OEE reader **port**; the reader **adapter** performs the `UNION ALL` over the caller's member tenants' schemas and returns a `list[per-tenant OEE]`. Averaging across that list is **pure** domain/use-case logic, asserted on the read model with per-BC in-memory datasets (never a shared dataset across BCs). The Plan-A metric is the **unweighted arithmetic mean** of the *contributing* member tenants — a member tenant whose CAGG has no rows yet (warming up) is excluded from the mean, not counted as zero (UC-006 alternative flow). A **volume-weighted** enterprise OEE (by line or production count) is deliberately deferred: it would change the read model the reader port returns — each per-tenant row would have to carry its weight — not merely the averaging logic, and the thin demo metric does not need it.
 
 Authorization is **membership-driven, with no new role.** The caller's `public.membership` rows determine which tenants are in scope; a tenant the caller does not belong to is excluded from the `UNION ALL`. Both `operator` and `tenant-admin` (ADR-0033) can read it — it is a read, and `operator` is read-only. No `EnterpriseOEE`-specific role is introduced.
 
@@ -32,6 +32,7 @@ This ADR **reframes ADR-0003's "Phase 3+ cross-tenant aggregator" note as the *g
 - `UNION ALL` cost scales linearly with a caller's member-tenant count; acceptable at 2–dozens of tenants (ADR-0003 scale context), not a general OLAP path.
 - A genuinely general analytics layer (arbitrary KPIs, filters, time-range pivots) is explicitly *not* delivered and remains Phase 3+ — this endpoint must not accrete query parameters that turn it into one.
 - The cross-BC use case imports both `identity` (membership) and an OEE reader port; it lives in `use_cases/` (not in any single BC's `application/`) to preserve `bc-independence`.
+- The unweighted mean shifts as tenants warm up (a 3-member caller sees the mean of 2, then of 3 once the third tenant produces its first CAGG row) and weights a low-volume and an ultra-high-volume plant equally. A volume-weighted figure is the truer enterprise number, but is out of the thin-demo scope and deferred (see Decision); this is an accepted demo simplification, recorded so it is not mistaken for an oversight.
 
 ## Migration Path
 

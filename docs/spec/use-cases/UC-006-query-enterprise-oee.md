@@ -90,4 +90,4 @@ Feature: Operator queries cross-tenant enterprise OEE
 
 ## Open questions
 
-- Whether the member-tenant average should be unweighted (mean of per-tenant OEE) or weighted (by line/production volume) is left to ADR-0037 and the cross-BC use-case task; this UC's Gherkin assumes the unweighted mean of the demo metric.
+- **Resolved (ADR-0037):** the member-tenant average is the **unweighted** mean of the *contributing* tenants (a warming-up tenant with no CAGG rows is excluded, not counted as zero); a volume-weighted figure would change the read model and is deferred out of the thin-demo scope. This UC's Gherkin reflects the unweighted mean.
