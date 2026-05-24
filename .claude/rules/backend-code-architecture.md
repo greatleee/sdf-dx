@@ -221,25 +221,30 @@ Python `import-linter` contracts (full list in ADR-0023):
 7. `composition-only-imports-adapters`
 
 Kotlin Konsist:
-- K1 (domain-no-system-reads), K2 (domain-no-persistence), K3 (adapters-no-upward — **active**: `assertArchitecture` layer-direction test in bridge + simulator, ADR-0032).
+- K1 (domain-no-system-reads), K2 (domain-no-persistence), K3 (adapters-no-upward, ADR-0032).
 
 Custom AST checks (`tests/architecture/`):
 - A1 — `datetime.now(` / `datetime.utcnow(` / `time.time(` call-site in domain.
 - A2 — `uuid.uuid4(` / `uuid.uuid1(` call-site in domain.
 - A3 — `uow.session` access outside `composition.py` (ADR-0020 escape-hatch enforcement).
 
-**Added by ADR-0032 (lint hardening):**
-- **Suppression discipline** — ruff `PGH004` (blanket-noqa) + `RUF100` (stale-noqa); mypy `warn_unused_ignores` + `enable_error_code=["ignore-without-code"]`; detekt `ForbiddenSuppress` (architecture rules un-silenceable) + `ForbiddenComment` (TODO/FIXME/STOPSHIP ban); `scripts/check-domain-no-suppress.py` (no inline `# noqa` / `# type: ignore` under `*/src/**/domain/` or `shared_kernel/`).
-- **Complexity** (explicit, Py↔Kt aligned) — ruff mccabe `max-complexity=12` + pylint `max-args/branches/returns/statements`; detekt `NestedBlockDepth` / `LongParameterList` / `ThrowsCount`.
-- **Private-member leak** — ruff `SLF001` (attribute access; `tests/**` exempt for fakes).
-- **Kotlin domain-purity defense-in-depth** — detekt `ForbiddenImport` + `ForbiddenMethodCall`, scoped `includes: ['**/domain/**']` (mirror K1/K2 at lint level). `ForbiddenMethodCall` **requires type resolution** → CI runs `detektMain detektTest`, not plain `detekt`. A new forbidden API must be added in BOTH `detekt.yml` and the Konsist tests.
-- **Formatter** — `apps/ot-gateway-kotlin/.editorconfig` (line length 120) aligns ktlint with detekt's `MaxLineLength`.
-- **Edit-time hook** (`.claude/hooks/lint-on-edit.sh`, registered in `.claude/settings.json`) — per-folder *self-only* format+lint at authoring time. An accelerator, **NOT** a gate; the authoritative gates remain pre-commit + CI.
+Added by ADR-0032:
+- Suppression — ruff `PGH004` + `RUF100`; mypy `warn_unused_ignores` + `enable_error_code=["ignore-without-code"]`; detekt `ForbiddenSuppress` + `ForbiddenComment` (`TODO` / `FIXME` / `STOPSHIP`); `scripts/check-domain-no-suppress.py` (no inline `# noqa` / `# type: ignore` under `*/src/**/domain/` or `shared_kernel/`).
+- Complexity — ruff mccabe `max-complexity=12` + pylint `max-args/branches/returns/statements`; detekt `NestedBlockDepth` / `LongParameterList` / `ThrowsCount`.
+- Private-member leak — ruff `SLF001` (`tests/**` exempt).
+- Kotlin domain-purity — detekt `ForbiddenImport` + `ForbiddenMethodCall`, `includes: ['**/domain/**']`.
+- Formatter — `apps/ot-gateway-kotlin/.editorconfig` line length 120.
+- Edit-time hook — `.claude/hooks/lint-on-edit.sh` (registered in `.claude/settings.json`), per-folder self-only.
 
 mypy strict / detekt / ktlint — no opt-outs.
 
-If your code adds a new domain module: mirror the lint contracts.
-DO NOT disable a contract to make code pass. Fix the code.
+DO:
+- Mirror the lint contracts when adding a new domain module.
+- Add a new forbidden API to BOTH `detekt.yml` and the Konsist test.
+- Run `detektMain detektTest` (not `detekt`) in CI.
+
+DON'T:
+- Disable a contract to make code pass. Fix the code.
 
 ---
 
