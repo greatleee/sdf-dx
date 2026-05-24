@@ -55,9 +55,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "21" }
       - uses: gradle/actions/setup-gradle@v4
-      - name: ktlint + detekt + test (all modules)
+      # detektMain/detektTest are the type-resolution variants — ForbiddenMethodCall
+      # (ban Instant.now()/UUID.randomUUID()/System.* /println in domain) resolves calls
+      # to FQ names and is a silent no-op under the plain `detekt` task (ADR-0032).
+      - name: ktlint + detekt (type resolution) + test (all modules)
         working-directory: apps/ot-gateway-kotlin
-        run: ./gradlew ktlintCheck detekt test
+        run: ./gradlew ktlintCheck detektMain detektTest test
 
   use-case-gate:
     runs-on: ubuntu-latest
@@ -72,3 +75,6 @@ jobs:
       # The script is PEP-723 self-contained (declares its own pyyaml dep), so `uv run`
       # needs no project context.
       - run: uv run scripts/check-use-case-coverage.py
+      # Domain suppression guard — no inline `# noqa` / `# type: ignore` under any
+      # */src/**/domain/ or shared_kernel/ (ruff has no dir-scoped suppression ban; ADR-0032).
+      - run: uv run scripts/check-domain-no-suppress.py
