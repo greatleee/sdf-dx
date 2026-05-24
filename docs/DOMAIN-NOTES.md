@@ -38,14 +38,14 @@ Working notes from absorbing the manufacturing domain via standards docs + vendo
 A complete automotive body+paint+trim assembly plant is traditionally organized into five sequential shops, each with distinct equipment types, cycle times, and quality concerns:
 
 1. **Stamping** — press lines stamp flat sheet steel into body panels. High-force, high-throughput; failure modes include die wear and sheet misalignment. Relatively low operator count, high capital intensity.
-2. **Body** (Body-in-White / BIW) — welding stations assemble stamped panels into the body shell. Robotic MIG/spot welding; quality KPI is weld integrity. The "body" shop is the backbone of the ISA-95 production line structure at Hyundai.
+2. **Body** (Body-in-White / BIW) — welding stations assemble stamped panels into the body shell. Robotic MIG/spot welding; quality KPI is weld integrity. Body-in-White defines the vehicle's structural skeleton and is among the most automation- and capital-intensive shops.
 3. **Paint** — body shells are primed, painted, and clear-coated in an environmentally controlled booth sequence. Long cycle times (drying/curing); volatile-organic-compound (VOC) concerns. A paint-shop stoppage is one of the most expensive in automotive because in-process bodies cannot wait indefinitely.
 4. **Assembly** — the painted body receives powertrain, interior, and electrical harnesses in a moving-line takt cadence. Highest operator count; quality gate is end-of-line (EOL) audit. EV plants (HMGMA) have a simplified powertrain assembly compared to ICE.
 5. **Inspection** — final vehicle inspection, headlamp alignment, water test, rolling-road dynamometer. Defects found here are late-stage rework — Quality ratio is most sensitive at this stage.
 
 Our model: every *Line* in every *Factory* runs all five shops as a sequential set of *Machines* (`MachineKind`: `stamping → body → paint → assembly → inspection`). The 5-shop ordering is the canonical data-path assumption; we do not model inter-shop buffers or re-sequencing (out of scope).
 
-Source: general automotive manufacturing domain knowledge; cross-checked against Hyundai Motor Group public plant descriptions and ISA-95 Part 3 (production schedule exchange).
+Source: general automotive manufacturing domain knowledge; cross-checked against Hyundai Motor Group public plant descriptions. (The 5-shop *sequence* is automotive convention, not an ISA-95 prescription — ISA-95 / IEC 62264 governs the equipment hierarchy and manufacturing-operations-management activity models, not physical shop layout.)
 
 ### Per-site OT edge — N simulators, tenant from group_id
 
@@ -86,4 +86,4 @@ Phase-2 data ownership: `factory`, `production_line`, and `machine` rows for eac
 
 `public` holds only the cross-tenant registry: `tenant`, `app_user`, `membership`. No domain data (topology, telemetry, line state, OEE) lives in `public` after Phase 2 migration.
 
-The isolation boundary consequence: a query inside tenant schema `kr` can reference `machine` without schema qualification; the connection-scoped `search_path = kr, public` makes this resolve to `kr.machine`. Cross-tenant queries (e.g., enterprise OEE) must explicitly enumerate the schemas via `UNION ALL` — they cannot use a single unqualified join.
+The isolation boundary consequence: a query inside tenant schema `kr` can reference `machine` without schema qualification; the connection-scoped `search_path = kr, public` makes this resolve to `kr.machine`. `public` is on the `search_path` only for registry lookups (`tenant`/`membership`); since it holds no domain tables, a per-tenant CAGG join has nothing to fall through to and cannot reach across schemas (ADR-0035). Cross-tenant queries (e.g., enterprise OEE) must explicitly enumerate the schemas via `UNION ALL` — they cannot use a single unqualified join.
