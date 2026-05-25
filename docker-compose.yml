@@ -99,7 +99,12 @@ services:
       redpanda:  { condition: service_healthy }
 
   dashboard:
-    build: ./apps/dashboard-react
+    # Repo-root context so the image can install the `@sdf/contracts` pnpm
+    # workspace dependency (packages/contracts/codegen/typescript) that the Vite
+    # build compiles in (contract-first §2 / ADR-0028); see the Dockerfile.
+    build:
+      context: .
+      dockerfile: apps/dashboard-react/Dockerfile
     ports: ["5173:80"]
     depends_on:
       api: { condition: service_started }

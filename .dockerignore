@@ -1,7 +1,16 @@
-# Applies to the repo-root build context used by the Python service images
-# (apps/api-python, apps/ingest-python). The Kotlin image builds from its own
-# scoped context (apps/ot-gateway-kotlin) and is unaffected. Keep
-# packages/contracts/codegen/python and apps/*-python/{pyproject.toml,src}.
+# Applies to the repo-root build context shared by the Python service images
+# (apps/api-python, apps/ingest-python) AND the React dashboard image
+# (apps/dashboard-react/Dockerfile). The Kotlin image builds from its own scoped
+# context (apps/ot-gateway-kotlin) and is unaffected.
+#   Python images keep: packages/contracts/codegen/python + apps/*-python/{pyproject.toml,src}.
+#   Dashboard image keeps: pnpm-lock.yaml, pnpm-workspace.yaml, root package.json,
+#     apps/dashboard-react/{package.json,src,index.html,vite.config.ts,tsconfig.json,
+#     *.config.*,public}, and packages/contracts/codegen/typescript (the @sdf/contracts
+#     workspace dep the Vite build compiles in).
+# The excludes below (node_modules / build / tests / .git / docs / .claude / secrets)
+# are correct and beneficial for the dashboard too: the dashboard build emits to
+# dist/ (not build/), reinstalls node_modules from the lockfile, and needs none of
+# tests/, so nothing it requires is stripped.
 .git
 .github
 .claude
