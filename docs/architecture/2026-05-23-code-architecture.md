@@ -518,9 +518,9 @@ This section integrates ADR-0019 (ORM containment), ADR-0020 (Unit of Work), and
 
 ### §8.1 ORM rules
 
-- **Forbidden in core**: any ORM declaration on domain types.
-  - Kotlin: **no JPA** (`@Entity`, `@Id` on domain types pollutes core; lazy-loading and change-tracking violate purity).
+- **Forbidden in core** (uncontested): any ORM declaration on domain types.
   - Python: **no SQLAlchemy ORM declarative base** on domain types. `class Order(Base)` is rejected if `Order` is a domain type.
+  - Kotlin: **no JPA `@Entity`/`@Id` on domain types.** (Adapter-internal use is a separate question — see Kotlin row below.)
 - **Allowed at adapters with containment** (Python, ADR-0019):
   - **SQLAlchemy 2.0 ORM is allowed inside the adapter file** under five containment rules:
     1. ORM declarative class is *private* (underscore prefix: `class _Base(DeclarativeBase): pass`, `class _Order(_Base): ...`).
@@ -529,7 +529,7 @@ This section integrates ADR-0019 (ORM containment), ADR-0020 (Unit of Work), and
     4. No class-level Port inheritance. Port satisfaction is structural; composition root acknowledges with `cast(Port, AdapterImpl(session))` (`adapters-no-upward` contract, ADR-0023 #6).
     5. DB-side `GENERATED` columns mirrored via `Computed("expr", persisted=True)`; adapter does not pass those columns in INSERT/UPDATE.
   - SQLAlchemy Core / `asyncpg` raw also remain available — pick by adapter need.
-- **Allowed at adapters** (Kotlin): **Exposed** (DSL — separate from domain types) or **JOOQ** (codegen — generated types stay in adapter package).
+- **Kotlin adapter persistence — decision deferred to Phase 2 W1~W2** (frozen as ADR when the first Kotlin BC with relational persistence lands). Candidates under consideration: **JPA under containment** (adapter-internal `_*Entity`, `@Transactional`-only-in-adapters, Konsist `_*Entity` non-leak rule — symmetric to Python's `_Order` pattern above), **Exposed** (DSL, table objects separate from domain), **JOOQ** (codegen, generated types adapter-local). JPA is the current working preference — industry-standard on JVM, target-viewer familiarity, symmetric containment story. The earlier "no JPA — pollutes core / lazy-loading violates purity" framing in this section conflated *domain-type leak* (still forbidden — see above) with *adapter-internal use* (allowable under containment) and is **retracted**. Phase 1 Kotlin (`ot-gateway-kotlin/{gateway,bridge,simulator}`) has no relational persistence — pure MQTT/Kafka — so no code is affected by the deferral.
 
 ### §8.2 Adapter pattern (Python, ORM containment example)
 
