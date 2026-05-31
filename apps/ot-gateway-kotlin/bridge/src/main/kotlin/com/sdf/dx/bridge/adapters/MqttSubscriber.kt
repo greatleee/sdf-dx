@@ -52,17 +52,20 @@ public class MqttSubscriber(
         options.isCleanStart = true
         client.setCallback(
             object : MqttCallback {
+                // TooGenericExceptionCaught: intentional — this is the Paho receive-thread
+                // boundary. Any unchecked RuntimeException escaping onMessage() or
+                // KafkaBridgeProducer.emit() would silently kill Paho's receive thread;
+                // catching Exception here ensures every failure is logged-and-dropped rather
+                // than silently swallowed. Jackson's JsonProcessingException (IOException)
+                // was the original motivation; the broader catch covers all unchecked paths.
+                @Suppress("TooGenericExceptionCaught")
                 override fun messageArrived(
                     topic: String,
                     message: MqttMessage,
                 ) {
                     try {
                         onMessage(topic, message)
-                    } catch (ex: IOException) {
-                        // mapper.writeValueAsString (Jackson) in KafkaBridgeProducer.emit() throws
-                        // JsonProcessingException (an IOException) on serialization failure.
-                        // Log and drop rather than propagating into Paho's receive thread where
-                        // exceptions are silently swallowed — visibility beats silent loss.
+                    } catch (ex: Exception) {
                         log.warn("dropping message on topic '{}' due to emit failure", topic, ex)
                     }
                 }
