@@ -10,9 +10,10 @@ on:
     branches: [main]
 
 # Top-level CI for application code. The contract SoT + codegen drift gate lives in
-# its own `contracts.yml` (path-filtered to packages/contracts/). Jobs here cover only
-# code that exists today; the plan's `frontend` (Section F) and `e2e-real` (Sections
-# F/G + the deferred Python ingest/API) jobs join when those land.
+# its own `contracts.yml` (path-filtered to packages/contracts/). Coverage now spans
+# every Phase 1 surface: python (Section D/E), kotlin (Section E), frontend (Section F
+# — lint/typecheck/unit + fake-adapter Playwright), use-case-gate (1:1 UC↔E2E, ADR-0007),
+# and e2e-real (Section G — full docker-compose stack), gated behind the fast jobs.
 
 jobs:
   python:
@@ -83,3 +84,155 @@ jobs:
       # Domain suppression guard — no inline `# noqa` / `# type: ignore` under any
       # */src/**/domain/ or shared_kernel/ (ruff has no dir-scoped suppression ban; ADR-0032).
       - run: uv run scripts/check-domain-no-suppress.py
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No `version:` — pnpm/action-setup@v4 reads it from the root package.json
+      # `packageManager` field (pnpm@9.12.0); specifying both is ERR_PNPM_BAD_PM_VERSION
+      # (same rationale as contracts.yml).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Single workspace-wide Node pin (= contracts.yml): the dashboard, the
+          # @sdf/contracts codegen, and the lockfile are one pnpm workspace. Pinning one
+          # Node across jobs keeps install/lockfile resolution identical and dodges the
+          # @hey-api/openapi-ts ESM-engine floor (Node ≥ 22.13) the codegen package carries.
+          node-version: "22.13.0"
+          cache: pnpm
+          # Single root lockfile — this is a pnpm workspace, there is no per-app
+          # apps/dashboard-react/pnpm-lock.yaml (diverges from the plan sketch).
+          cache-dependency-path: pnpm-lock.yaml
+      # Installs the whole workspace from the root lockfile; the dashboard's
+      # @sdf/contracts (workspace:*) dep resolves to the committed generated artifacts.
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+      - name: eslint (FC/IS boundaries + drift guards — ADR-0031)
+        working-directory: apps/dashboard-react
+        run: pnpm lint
+      - name: tsc (strict typecheck, no emit)
+        working-directory: apps/dashboard-react
+        run: pnpm exec tsc --noEmit
+      - name: vitest (domain + application + adapter)
+        working-directory: apps/dashboard-react
+        run: pnpm test
+      # --with-deps pulls the OS libs Chromium needs on ubuntu-latest (headless deps
+      # are not preinstalled); chromium-only keeps it lean.
+      - name: Install Playwright browser
+        working-directory: apps/dashboard-react
+        run: pnpm exec playwright install --with-deps chromium
+      # Fake-adapter E2E: the config's top-level webServer self-hosts `pnpm dev:fake`,
+      # MSW serves the read API, the real HTTP/WS adapters run against controlled
+      # responses (ADR-0028). This is the 1:1 UC↔E2E gate (ADR-0007) run without a stack.
+      - name: Playwright e2e (fake adapter — MSW)
+        working-directory: apps/dashboard-react
+        run: pnpm e2e:fake
+
+  e2e-real:
+    runs-on: ubuntu-latest
+    # Gate the expensive full-stack build behind the fast lint/type/unit jobs so a
+    # cheap failure short-circuits before five Docker images are built.
+    needs: [python, kotlin, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      # --build forces fresh images from current source (plain `up` reuses any cached
+      # image); --wait blocks until every healthcheck is green — timescale/hivemq/redpanda
+      # at compose level, dashboard via its image-level HEALTHCHECK (Compose v2 honors it).
+      # The api carries no healthcheck on either side, so --wait can return before it serves;
+      # we poll /readyz explicitly below.
+      - name: Build + start full stack (docker compose)
+        # --wait-timeout bounds the indefinite wait if a service never reaches
+        # healthy; 300s comfortably covers the cold-build path (~3 min observed)
+        # and fails fast into the log-dump step on a stuck service.
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Wait for API readiness (/readyz)
+        run: |
+          for _ in $(seq 1 60); do
+            curl -fsS http://localhost:8000/readyz && exit 0
+            sleep 2
+          done
+          echo "::error::API /readyz never became ready"
+          exit 1
+      # Phase-1 ingest pattern-sub race (docs/KNOWN-UNKNOWNS.md): ingest subscribes
+      # to a Kafka topic pattern before the bridge's first publish creates the
+      # topic, so aiokafka assigns 0 partitions and `metadata_max_age_ms`'s 5min
+      # default leaves it stuck for the whole CI window. Wait for the topic to
+      # exist (proxy for "bridge produced ≥1 message"), then restart ingest so
+      # its pattern-discovery succeeds. Proper fix (static topic name or eager
+      # bridge publish) is post-Phase-1 / deployment-blocking.
+      - name: Wait for Kafka telemetry topic creation
+        run: |
+          for _ in $(seq 1 60); do
+            if docker compose exec -T redpanda rpk topic list 2>/dev/null \
+                 | grep -q 'sdf\.sdf_default\.machine\.telemetry'; then
+              echo "topic exists"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Kafka telemetry topic was never created"
+          exit 1
+      - name: Restart ingest to bypass pattern-sub race
+        run: docker compose restart ingest
+      # /readyz only proves the API process is up; UC-001's Line-state pill and
+      # UC-002's OEE tiles are computed from machine_telemetry, which is empty
+      # until ingest writes rows. The bottleneck-station OEE calculation
+      # (ADR-0026 / PR #25) needs a counter-delta on every machine, so we wait
+      # for ≥60 rows. 120s ceiling stays well clear of the post-restart flush.
+      - name: Wait for telemetry warm-up
+        run: |
+          for _ in $(seq 1 60); do
+            # `|| count=0` tolerates `set -e` + a failing pipeline in the
+            # substitution (e.g. transient psql/docker error); the loop must
+            # retry, not die on the first hiccup.
+            count=$(docker compose exec -T timescale psql -U sdf -d sdf -tAc \
+              "SELECT COUNT(*) FROM machine_telemetry" 2>/dev/null | tr -d '[:space:]') || count=0
+            if [ "${count:-0}" -ge 60 ]; then
+              echo "machine_telemetry rows: $count"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::machine_telemetry never reached 60 rows"
+          exit 1
+      # The seeded production_line.id is `uuid_generate_v4()` (002_schema.sql), so
+      # the value is random per stack-up. UC specs read this via `E2E_LINE_ID` —
+      # unset (CI `fake` job) preserves the nil-UUID fallback, set (here) routes
+      # the dashboard at the real seeded Line.
+      - name: Discover seeded production_line.id
+        run: |
+          LINE_ID=$(docker compose exec -T timescale psql -U sdf -d sdf -tAc \
+            "SELECT id FROM production_line LIMIT 1" | tr -d '[:space:]') || LINE_ID=""
+          if [ -z "$LINE_ID" ]; then
+            echo "::error::no production_line row found"
+            exit 1
+          fi
+          echo "E2E_LINE_ID=$LINE_ID" >> "$GITHUB_ENV"
+          echo "seeded line id: $LINE_ID"
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browser
+        working-directory: apps/dashboard-react
+        run: pnpm exec playwright install --with-deps chromium
+      # Real-stack E2E: the `real` Playwright project has no webServer and targets the
+      # compose-served dashboard at :5173 (api at :8000). Same UC specs as `fake`,
+      # written to hold against any valid Line state (Section G). The previous step
+      # exported E2E_LINE_ID into $GITHUB_ENV, which the specs read in `_helpers.ts`.
+      - name: Playwright e2e (real stack — docker compose)
+        working-directory: apps/dashboard-react
+        run: pnpm e2e:real
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color > docker-logs.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: docker-logs
+          path: docker-logs.txt
