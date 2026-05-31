@@ -109,7 +109,7 @@ DO:
   - SQLAlchemy Core / `asyncpg` raw remain available — pick by adapter need.
 - Use case owns commit via UoW (ADR-0020): `async with self._uow_factory() as uow: ... await uow.commit()`.
 - Production sessionmaker: `async_sessionmaker(engine, expire_on_commit=False)` — avoids async lazy-load foot-gun.
-- Kotlin: Exposed (DSL) or JOOQ (codegen) in adapters.
+- Kotlin adapter persistence: **TBD — Phase 2 W1~W2 ADR.** Candidates: JPA under containment / Exposed (DSL) / JOOQ (codegen). JPA 우선 검토. Phase 1: no Kotlin DB code.
 - Map DB rows → domain via explicit `_to_domain(row)` helper at file boundary.
 
 DON'T:
