@@ -82,10 +82,29 @@ reflects the tested design surface.
 | `apps/ot-gateway-kotlin` | 34%     | 98% |
 <!-- END stats -->
 
-## Quick start
+## Quick start (Phase 1)
+
 ```bash
-docker compose up
+docker compose up -d --wait
 ```
+
+Then:
+- Dashboard: http://localhost:5173
+- API:       http://localhost:8000/docs
+- Postgres:  `psql postgresql://sdf:sdf@localhost:5432/sdf`
+- Redpanda console (optional): http://localhost:9644
+
+Tear down: `docker compose down -v`.
+
+First run ≈ 4 minutes (mostly image builds); subsequent runs ≈ 30 seconds.
+
+> **Note:** On a cold first run the ingest service subscribes to a Kafka topic
+> pattern before the bridge has published its first message — so the topic
+> doesn't exist yet and aiokafka assigns 0 partitions. Once the bridge has been
+> running for a few seconds, restart ingest to trigger rebalance:
+> `docker compose restart ingest`. Tracked in
+> [`docs/KNOWN-UNKNOWNS.md`](docs/KNOWN-UNKNOWNS.md) — proper fix (pre-create
+> the topic or add a retry loop) lands in a follow-up.
 
 ## Documentation
 - Design spec: `docs/roadmap/2026-05-22-sdf-manufacturing-dx-portfolio-design.md`
