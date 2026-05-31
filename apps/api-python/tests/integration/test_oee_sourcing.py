@@ -32,6 +32,7 @@ from sdf_api.contexts.monitoring.adapters.db import (
 from sdf_api.contexts.monitoring.domain.oee import OeeReading
 from sdf_api.contexts.monitoring.domain.read_models import LineOeeSnapshot, OeeWindow
 from sdf_api.shared_kernel.ids import LineId
+from tests.shared_kernel.fakes import FixedClock
 
 # Repo root: tests/integration/<file> → tests → api-python → apps → repo root.
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -84,7 +85,8 @@ async def _seed_line_with_two_machines(conn: asyncpg.Connection) -> uuid.UUID:
         "sdf_default/line-a/weld",
     )
 
-    now = datetime.now(UTC)
+    _clock = FixedClock(frozen=datetime(2026, 5, 23, 12, 0, tzinfo=UTC))
+    now = _clock.now()
     start = now - timedelta(minutes=2)  # both samples inside the trailing 5 min
     rows: list[tuple[datetime, uuid.UUID, str, float, int]] = [
         # machine A: Δcycle 240, Δgood 228
