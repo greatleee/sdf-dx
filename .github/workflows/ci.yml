@@ -143,11 +143,15 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       # --build forces fresh images from current source (plain `up` reuses any cached
-      # image); --wait blocks until every healthcheck (timescale/hivemq/redpanda) is
-      # green. The api/dashboard services carry no healthcheck, so --wait only confirms
-      # they started — actual API readiness is polled below.
+      # image); --wait blocks until every healthcheck is green — timescale/hivemq/redpanda
+      # at compose level, dashboard via its image-level HEALTHCHECK (Compose v2 honors it).
+      # The api carries no healthcheck on either side, so --wait can return before it serves;
+      # we poll /readyz explicitly below.
       - name: Build + start full stack (docker compose)
-        run: docker compose up -d --build --wait
+        # --wait-timeout bounds the indefinite wait if a service never reaches
+        # healthy; 300s comfortably covers the cold-build path (~3 min observed)
+        # and fails fast into the log-dump step on a stuck service.
+        run: docker compose up -d --build --wait --wait-timeout 300
       - name: Wait for API readiness (/readyz)
         run: |
           for _ in $(seq 1 60); do
@@ -156,6 +160,62 @@ jobs:
           done
           echo "::error::API /readyz never became ready"
           exit 1
+      # Phase-1 ingest pattern-sub race (docs/KNOWN-UNKNOWNS.md): ingest subscribes
+      # to a Kafka topic pattern before the bridge's first publish creates the
+      # topic, so aiokafka assigns 0 partitions and `metadata_max_age_ms`'s 5min
+      # default leaves it stuck for the whole CI window. Wait for the topic to
+      # exist (proxy for "bridge produced ≥1 message"), then restart ingest so
+      # its pattern-discovery succeeds. Proper fix (static topic name or eager
+      # bridge publish) is post-Phase-1 / deployment-blocking.
+      - name: Wait for Kafka telemetry topic creation
+        run: |
+          for _ in $(seq 1 60); do
+            if docker compose exec -T redpanda rpk topic list 2>/dev/null \
+                 | grep -q 'sdf\.sdf_default\.machine\.telemetry'; then
+              echo "topic exists"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Kafka telemetry topic was never created"
+          exit 1
+      - name: Restart ingest to bypass pattern-sub race
+        run: docker compose restart ingest
+      # /readyz only proves the API process is up; UC-001's Line-state pill and
+      # UC-002's OEE tiles are computed from machine_telemetry, which is empty
+      # until ingest writes rows. The bottleneck-station OEE calculation
+      # (ADR-0026 / PR #25) needs a counter-delta on every machine, so we wait
+      # for ≥60 rows. 120s ceiling stays well clear of the post-restart flush.
+      - name: Wait for telemetry warm-up
+        run: |
+          for _ in $(seq 1 60); do
+            # `|| count=0` tolerates `set -e` + a failing pipeline in the
+            # substitution (e.g. transient psql/docker error); the loop must
+            # retry, not die on the first hiccup.
+            count=$(docker compose exec -T timescale psql -U sdf -d sdf -tAc \
+              "SELECT COUNT(*) FROM machine_telemetry" 2>/dev/null | tr -d '[:space:]') || count=0
+            if [ "${count:-0}" -ge 60 ]; then
+              echo "machine_telemetry rows: $count"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::machine_telemetry never reached 60 rows"
+          exit 1
+      # The seeded production_line.id is `uuid_generate_v4()` (002_schema.sql), so
+      # the value is random per stack-up. UC specs read this via `E2E_LINE_ID` —
+      # unset (CI `fake` job) preserves the nil-UUID fallback, set (here) routes
+      # the dashboard at the real seeded Line.
+      - name: Discover seeded production_line.id
+        run: |
+          LINE_ID=$(docker compose exec -T timescale psql -U sdf -d sdf -tAc \
+            "SELECT id FROM production_line LIMIT 1" | tr -d '[:space:]') || LINE_ID=""
+          if [ -z "$LINE_ID" ]; then
+            echo "::error::no production_line row found"
+            exit 1
+          fi
+          echo "E2E_LINE_ID=$LINE_ID" >> "$GITHUB_ENV"
+          echo "seeded line id: $LINE_ID"
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile
       - name: Install Playwright browser
@@ -163,7 +223,8 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       # Real-stack E2E: the `real` Playwright project has no webServer and targets the
       # compose-served dashboard at :5173 (api at :8000). Same UC specs as `fake`,
-      # written to hold against any valid Line state (Section G).
+      # written to hold against any valid Line state (Section G). The previous step
+      # exported E2E_LINE_ID into $GITHUB_ENV, which the specs read in `_helpers.ts`.
       - name: Playwright e2e (real stack — docker compose)
         working-directory: apps/dashboard-react
         run: pnpm e2e:real
