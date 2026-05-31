@@ -13,9 +13,9 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("com.lemonappdev:konsist:0.17.3")
-    testImplementation("org.testcontainers:testcontainers:1.20.2")
-    testImplementation("org.testcontainers:junit-jupiter:1.20.2")
-    testImplementation("org.testcontainers:hivemq:1.20.2")
+    testImplementation("org.testcontainers:testcontainers:1.20.6")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.6")
+    testImplementation("org.testcontainers:hivemq:1.20.6")
 }
 
 tasks.test { useJUnitPlatform() }

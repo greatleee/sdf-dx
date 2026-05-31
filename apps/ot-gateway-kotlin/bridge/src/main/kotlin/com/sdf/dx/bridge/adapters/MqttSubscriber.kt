@@ -3,10 +3,15 @@ package com.sdf.dx.bridge.adapters
 import com.sdf.dx.bridge.domain.NormalizedRecord
 import com.sdf.dx.bridge.domain.Normalizer
 import com.sdf.dx.bridge.domain.NormalizerMetric
+import org.eclipse.paho.mqttv5.client.IMqttToken
+import org.eclipse.paho.mqttv5.client.MqttCallback
 import org.eclipse.paho.mqttv5.client.MqttClient
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptions
+import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse
 import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence
+import org.eclipse.paho.mqttv5.common.MqttException
 import org.eclipse.paho.mqttv5.common.MqttMessage
+import org.eclipse.paho.mqttv5.common.packet.MqttProperties
 import org.eclipse.tahu.message.SparkplugBPayloadDecoder
 import org.eclipse.tahu.message.model.SparkplugBPayload
 import org.eclipse.tahu.model.MetricDataTypeMap
@@ -34,13 +39,62 @@ public class MqttSubscriber(
     private val client = MqttClient(mqttUrl, "sdf-bridge-${System.nanoTime()}", MemoryPersistence())
     private val decoder = SparkplugBPayloadDecoder()
 
-    /** Connects and subscribes to the node-level NDATA and NBIRTH filters at QoS 1. */
+    /**
+     * Connects and subscribes to the node-level NDATA and NBIRTH filters at QoS 1.
+     *
+     * Messages are delivered through a single [MqttCallback] registered with [MqttClient.setCallback]
+     * rather than the per-subscription `subscribe(filter, qos, listener)` overload: that overload is
+     * recursively self-calling in Paho mqttv5 1.2.5 (`MqttClient.subscribe:525`) and throws
+     * `StackOverflowError` on first use, which previously killed the bridge at startup.
+     */
     public fun start() {
         val options = MqttConnectionOptions()
         options.isCleanStart = true
+        client.setCallback(
+            object : MqttCallback {
+                // TooGenericExceptionCaught: intentional — this is the Paho receive-thread
+                // boundary. Any unchecked RuntimeException escaping onMessage() or
+                // KafkaBridgeProducer.emit() would silently kill Paho's receive thread;
+                // catching Exception here ensures every failure is logged-and-dropped rather
+                // than silently swallowed. Jackson's JsonProcessingException (IOException)
+                // was the original motivation; the broader catch covers all unchecked paths.
+                @Suppress("TooGenericExceptionCaught")
+                override fun messageArrived(
+                    topic: String,
+                    message: MqttMessage,
+                ) {
+                    try {
+                        onMessage(topic, message)
+                    } catch (ex: Exception) {
+                        log.warn("dropping message on topic '{}' due to emit failure", topic, ex)
+                    }
+                }
+
+                override fun connectComplete(
+                    reconnect: Boolean,
+                    serverURI: String?,
+                ) = log.info("MQTT connect complete reconnect={} uri={}", reconnect, serverURI)
+
+                override fun disconnected(disconnectResponse: MqttDisconnectResponse?): Unit =
+                    log.warn("MQTT disconnected: {}", disconnectResponse?.reasonString)
+
+                override fun mqttErrorOccurred(exception: MqttException?): Unit =
+                    log.warn("MQTT error occurred", exception)
+
+                override fun deliveryComplete(token: IMqttToken?): Unit =
+                    log.trace("delivery complete (subscriber publishes nothing): {}", token)
+
+                override fun authPacketArrived(
+                    reasonCode: Int,
+                    properties: MqttProperties?,
+                ): Unit = log.trace("auth packet arrived reasonCode={}", reasonCode)
+            },
+        )
         client.connect(options)
-        client.subscribe(NDATA_FILTER, QOS_AT_LEAST_ONCE) { topic, message -> onMessage(topic, message) }
-        client.subscribe(NBIRTH_FILTER, QOS_AT_LEAST_ONCE) { topic, message -> onMessage(topic, message) }
+        client.subscribe(
+            arrayOf(NDATA_FILTER, NBIRTH_FILTER),
+            intArrayOf(QOS_AT_LEAST_ONCE, QOS_AT_LEAST_ONCE),
+        )
         log.info("MQTT subscriber connected, filters=[{}, {}]", NDATA_FILTER, NBIRTH_FILTER)
     }
 

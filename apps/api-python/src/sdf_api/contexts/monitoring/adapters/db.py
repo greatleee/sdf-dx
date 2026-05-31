@@ -10,12 +10,28 @@ OEE quantity sourcing (Phase 1)
 -------------------------------
 ``cycle_count`` / ``good_count`` are *cumulative monotonic counters*, so the
 per-bucket produced/good quantities are counter **deltas**, computed here as
-``max(value_num) - min(value_num)`` per machine over a trailing window, summed to
-the line. We query ``machine_telemetry`` directly rather than the ``line_oee_5m``
-continuous aggregate, because that CAGG does ``SUM(value_num)`` over the absolute
-counters (it treats them as gauges) and so cannot yield a correct produced
-quantity — see docs/KNOWN-UNKNOWNS.md. The A·P·Q math itself is the Section D
-domain core (``compute_oee``); this adapter only sources its inputs.
+``max(value_num) - min(value_num)`` per machine over a trailing window. The line's
+produced/good is the **bottleneck (smallest-delta) station**, NOT the sum across
+stations. The line is *serial* (press→weld→paint→inspect→pack): every unit
+traverses every station, so the line cannot output faster than its slowest stage —
+the bottleneck's throughput *is* the line's throughput. Summing the per-station
+deltas overcounts ≈Nx (N stations) and pushes Performance above 1, which is
+inconsistent with the single per-line ``ideal_cycle_time_s`` and tripped the
+``OeeDTO`` ``maximum: 1`` bound (HTTP 500). Both produced and good are taken from
+the *same* bottleneck row, so Quality = good/produced ≤ 1 holds (the edge
+invariant ``cycle_count = good_count + scrap_count`` is per-machine). Caveat: a
+station present in the window with only a *single* telemetry sample has
+max-min = 0, which sorts first under ``ORDER BY produced ASC`` and becomes a
+false "bottleneck" → the line reports produced 0 → ``OeeUndefined`` → 404, even
+if other stations produced; this cannot occur under the Phase-1 lockstep
+simulator (all stations always online, ≥ 2 samples/window), but a
+``produced > 0`` (or ``HAVING count(*) > 1``) guard in the lateral is the
+Phase-2 fix for staggered-start / multi-line scenarios. We query
+``machine_telemetry`` directly rather than the ``line_oee_5m`` continuous
+aggregate, because that CAGG does ``SUM(value_num)`` over the absolute counters (it
+treats them as gauges) and so cannot yield a correct produced quantity — see
+docs/KNOWN-UNKNOWNS.md. The A·P·Q math itself is the Section D domain core
+(``compute_oee``); this adapter only sources its inputs.
 """
 
 from __future__ import annotations
@@ -34,8 +50,9 @@ from sdf_api.shared_kernel.timestamp import Timestamp
 _WINDOW_SECONDS = 5 * 60.0
 _IDEAL_CYCLE_TIME_S = 1.0
 
-# Produced/good are per-machine counter deltas over the trailing window, summed to
-# the line; observed_at is the window's latest telemetry instant.
+# Produced/good are per-machine counter deltas over the trailing window; the line's
+# produced/good is the bottleneck (smallest-delta) station, not the sum (see module
+# docstring). observed_at is the window's latest telemetry instant.
 _OEE_QUERY = """
 WITH line_machines AS (
     SELECT id FROM machine WHERE line_id = $1
@@ -58,10 +75,17 @@ per_machine AS (
     GROUP BY t.machine_id
 )
 SELECT
-    (SELECT end_time FROM window_end) AS observed_at,
-    coalesce(sum(produced), 0) AS produced_qty,
-    coalesce(sum(good), 0) AS good_qty
-FROM per_machine;
+    w.end_time AS observed_at,
+    coalesce(b.produced, 0) AS produced_qty,
+    coalesce(b.good, 0) AS good_qty
+FROM window_end w
+LEFT JOIN LATERAL (
+    SELECT produced, good
+    FROM per_machine
+    ORDER BY produced ASC NULLS LAST, good ASC  -- tie-break arbitrary: tied rows
+                                                 -- have identical produced+good -> identical OEE
+    LIMIT 1
+) b ON true;
 """
 
 
