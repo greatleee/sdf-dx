@@ -1,0 +1,34 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        # `for ...; do (subshell); done` returns ONLY the last iteration's exit
+        # code, so a naive loop silently passes when the first app fails and the
+        # second succeeds. Accumulate `rc` instead — both apps run (full feedback),
+        # hook exits nonzero if either failed.
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && rc=0; for d in apps/api-python apps/ingest-python; do (cd "$d" && ruff check . && ruff format --check .) || rc=$?; done; exit $rc'
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd apps/dashboard-react && pnpm lint'
+        language: system
+        files: ^apps/dashboard-react/
+        pass_filenames: false
+
+      - id: ktlint
+        name: ktlint
+        entry: bash -c 'cd apps/ot-gateway-kotlin && ./gradlew --no-daemon -q ktlintCheck'
+        language: system
+        files: ^apps/ot-gateway-kotlin/.*\.(kt|kts)$
+        pass_filenames: false
+
+      - id: use-case-coverage
+        name: use-case coverage
+        entry: uv run scripts/check-use-case-coverage.py
+        language: system
+        files: ^(docs/spec/(USE-CASES\.md|use-cases/)|apps/dashboard-react/tests/e2e/)
+        pass_filenames: false
