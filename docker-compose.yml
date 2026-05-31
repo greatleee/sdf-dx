@@ -105,7 +105,7 @@ services:
     build:
       context: .
       dockerfile: apps/dashboard-react/Dockerfile
-    ports: ["5173:80"]
+    ports: ["5173:8080"]
     depends_on:
       api: { condition: service_started }
 

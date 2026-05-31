@@ -29,14 +29,14 @@ COPY apps/dashboard-react/ /app/apps/dashboard-react/
 COPY packages/contracts/codegen/typescript/ /app/packages/contracts/codegen/typescript/
 RUN pnpm --filter @sdf/dashboard build
 
-FROM nginx:1.27-alpine AS runtime
-# The nginx master process runs as root to bind :80; worker processes drop to
-# the unprivileged `nginx` user. This is standard nginx:alpine behaviour — the
-# request-handling surface is non-root. A rootless variant (listen on an
-# unprivileged port) is deferred until the Hetzner deployment adds a reverse
-# proxy in front that handles TLS termination.
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+# nginx-unprivileged is purpose-built for rootless operation: it already
+# listens on port 8080, runs as the non-root `nginx` user (UID 101), stores
+# the pid in /tmp/nginx.pid, and redirects all temp dirs to /tmp — no extra
+# chown or USER directive needed. The server block (nginx.conf) is dropped
+# into conf.d/; the main nginx.conf from the base image is kept as-is.
 COPY --from=build /app/apps/dashboard-react/dist /usr/share/nginx/html
 COPY apps/dashboard-react/nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-    CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
+    CMD wget -qO- http://127.0.0.1:8080/ >/dev/null 2>&1 || exit 1
